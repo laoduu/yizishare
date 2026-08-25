@@ -1,0 +1,306 @@
+<Window x:Class="YiziShare.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="YiziShare"
+        Height="680" Width="320"
+        MinHeight="560" MinWidth="300"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        FontFamily="Microsoft YaHei UI, Segoe UI, Arial"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Loaded="MainWindow_Loaded"
+        Closing="MainWindow_Closing"
+        StateChanged="MainWindow_StateChanged">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome GlassFrameThickness="0" CornerRadius="16" CaptionHeight="0" ResizeBorderThickness="6"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- 液态玻璃按钮 -->
+        <Style x:Key="GlassButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <Border.BorderBrush>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#33FFFFFF" Offset="0"/>
+                                    <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.BorderBrush>
+                            <Border.BorderThickness>1</Border.BorderThickness>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#11FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 次要玻璃按钮 -->
+        <Style x:Key="SecondaryGlassButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SecondaryBtnBgBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnPressedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 工具栏图标按钮 -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Opacity" Value="0.92"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#22FFFFFF"/>
+                                <Setter Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#11FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 编辑图标按钮 -->
+        <Style x:Key="EditIconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 状态标签 -->
+        <Style x:Key="StatusBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="8,3"/>
+        </Style>
+    </Window.Resources>
+
+    <!-- 主容器 - 圆角 + 阴影 + 主题细边（亮色深边/暗色金边，保证窗口边界清晰） -->
+    <Border CornerRadius="16" Background="{DynamicResource PanelBgBrush}"
+            BorderBrush="{DynamicResource WindowEdgeBrush}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="32" ShadowDepth="4" Direction="270" Color="#20000000" Opacity="0.4"/>
+        </Border.Effect>
+
+        <!-- 外网格：头 + 内容 + 尾 -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="34"/>
+            </Grid.RowDefinitions>
+
+            <!-- ========== 顶部标题栏（黑金） ========== -->
+            <Border Grid.Row="0" CornerRadius="16,16,0,0" MouseLeftButtonDown="HeaderBg_MouseLeftButtonDown"
+                    Background="{StaticResource BgHeaderGradient}"
+                    BorderBrush="{StaticResource HeaderSeparatorBrush}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <!-- 高光层 -->
+                    <Border CornerRadius="16,16,0,0" Height="24" VerticalAlignment="Top" IsHitTestVisible="False"
+                            Background="{StaticResource BgHeaderHighlight}"/>
+                    <Grid Margin="16,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- logo：素材为黑底金鹰，加金圈描边避免在黑金标题栏上"隐身" -->
+                            <Border Width="30" Height="30" CornerRadius="15" Background="#1C1913"
+                                    BorderBrush="{StaticResource AccentGoldHoverBrush}" BorderThickness="1"
+                                    Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Image Source="/Assets/logo.png" Width="24" Height="24"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Image.Clip>
+                                        <EllipseGeometry Center="12,12" RadiusX="12" RadiusY="12"/>
+                                    </Image.Clip>
+                                </Image>
+                            </Border>
+                            <TextBlock Text="YiziShare" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextOnDarkBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="BtnTogglePanel" Content="◀" ToolTip="收起详情面板"
+                                    Style="{StaticResource IconButton}" Visibility="Collapsed"
+                                    Margin="0,0,2,0" Click="BtnTogglePanel_Click"/>
+                            <Button x:Name="BtnScan" Content="🔄" ToolTip="重新扫描"
+                                    Style="{StaticResource IconButton}" Click="BtnScan_Click"/>
+                            <Button x:Name="BtnThemeToggle" Content="🌙" ToolTip="切换深色/浅色主题"
+                                    Style="{StaticResource IconButton}" Margin="2,0,0,0" Click="BtnThemeToggle_Click"/>
+                            <Button Content="─" ToolTip="最小化" FontSize="14"
+                                    Style="{StaticResource IconButton}" Margin="2,0" Click="BtnMinimize_Click"/>
+                            <Button Content="✕" ToolTip="关闭到托盘" FontSize="13"
+                                    Style="{StaticResource IconButton}" Margin="2,0" Click="BtnClose_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ========== 内容区域 ========== -->
+            <!-- 左右两栏：左设备列表，右详情面板 -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" MinWidth="260"/>
+                    <ColumnDefinition Width="0"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧：设备列表 -->
+                <Grid Grid.Column="0" Background="{DynamicResource PanelBgBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="46"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="{DynamicResource PanelBgBrush}" Padding="10,7" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1">
+                        <Border CornerRadius="15" Background="{DynamicResource SearchPillBrush}" Padding="12,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                <TextBox x:Name="SearchBox" Grid.Column="1" Text=""
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource TextPrimaryBrush}"
+                                         CaretBrush="{DynamicResource TextPrimaryBrush}"
+                                         TextChanged="SearchBox_TextChanged"
+                                         VerticalContentAlignment="Center" FontSize="12" Padding="7,0,0,0"/>
+                            </Grid>
+                        </Border>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" x:Name="DeviceScrollViewer" VerticalScrollBarVisibility="Auto" Padding="0,4">
+                        <StackPanel x:Name="DeviceListPanel"/>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- 右侧：详情面板 -->
+                <Grid Grid.Column="1" x:Name="RightPanel" Background="{DynamicResource PanelBgBrush}" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="{DynamicResource CardBgBrush}" Padding="24,20" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid x:Name="DeviceInfoPanel" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="24" Background="{DynamicResource NavyPrimaryBrush}" Margin="0,0,14,0">
+                                    <TextBlock x:Name="DeviceAvatarIcon" Text="💻" FontSize="22"
+                                               Foreground="{DynamicResource TextOnDarkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="DeviceTitle" Text="" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <Button x:Name="BtnEditNickname" Content="✏️"
+                                                Style="{StaticResource EditIconButton}" VerticalAlignment="Center"
+                                                Margin="6,0,0,0" Click="BtnEditNickname_Click" Opacity="1"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                        <TextBlock x:Name="DeviceIp" Text="" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
+                                        <TextBlock x:Name="DeviceMac" Text="" FontSize="10" Foreground="{DynamicResource TextFaintBrush}" Margin="12,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                        <Border x:Name="StatusBadge" Style="{StaticResource StatusBadge}" Background="{DynamicResource SemanticGreenBgBrush}">
+                                            <TextBlock x:Name="StatusText" Text="" FontSize="10" Foreground="{DynamicResource SemanticGreenBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Button Grid.Column="2" x:Name="BtnOpenAll" Content="📂 全部打开"
+                                        Style="{StaticResource GlassButton}" VerticalAlignment="Center"
+                                        Padding="12,7" Click="BtnOpenAll_Click" Visibility="Collapsed"
+                                        Background="{StaticResource AccentGoldBrush}"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20" Background="{DynamicResource PanelBgBrush}">
+                        <StackPanel x:Name="ShareContentPanel"/>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ========== 底部状态栏（黑金） ========== -->
+            <Border Grid.Row="2" CornerRadius="0,0,16,16" Background="{StaticResource BgStatusGradient}">
+                <TextBlock x:Name="BottomStatus" Text="就绪" Foreground="{StaticResource TextOnDarkBrush}" Opacity="0.85"
+                           FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

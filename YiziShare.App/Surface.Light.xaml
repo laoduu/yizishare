@@ -1,0 +1,63 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 浅色表面层（键与 Surface.Dark.xaml 一一对应，ThemeManager 运行时替换） -->
+
+    <Color x:Key="ListBgColor">#FAFAFA</Color>
+    <SolidColorBrush x:Key="ListBgBrush" Color="#FAFAFA"/>
+    <Color x:Key="PanelBgColor">#F8F9FA</Color>
+    <SolidColorBrush x:Key="PanelBgBrush" Color="#F8F9FA"/>
+    <Color x:Key="CardBgColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="CardBgBrush" Color="#FFFFFF"/>
+    <Color x:Key="CardHoverColor">#FAFAFA</Color>
+    <SolidColorBrush x:Key="CardHoverBrush" Color="#FAFAFA"/>
+    <Color x:Key="CardBorderColor">#E8E8E8</Color>
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#E8E8E8"/>
+    <Color x:Key="WindowEdgeColor">#4D000000</Color>
+    <SolidColorBrush x:Key="WindowEdgeBrush" Color="#4D000000"/>
+
+    <Color x:Key="InputBgColor">#F5F5F5</Color>
+    <SolidColorBrush x:Key="InputBgBrush" Color="#F5F5F5"/>
+    <Color x:Key="SearchPillColor">#F0F0F0</Color>
+    <SolidColorBrush x:Key="SearchPillBrush" Color="#F0F0F0"/>
+    <Color x:Key="SecondaryBtnBgColor">#F0F0F0</Color>
+    <SolidColorBrush x:Key="SecondaryBtnBgBrush" Color="#F0F0F0"/>
+    <Color x:Key="SecondaryBtnHoverColor">#E0E0E0</Color>
+    <SolidColorBrush x:Key="SecondaryBtnHoverBrush" Color="#E0E0E0"/>
+    <Color x:Key="SecondaryBtnPressedColor">#D0D0D0</Color>
+    <SolidColorBrush x:Key="SecondaryBtnPressedBrush" Color="#D0D0D0"/>
+
+    <Color x:Key="TextPrimaryColor">#333333</Color>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#333333"/>
+    <Color x:Key="TextSecondaryColor">#666666</Color>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#666666"/>
+    <Color x:Key="TextTertiaryColor">#999999</Color>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#999999"/>
+    <Color x:Key="TextFaintColor">#AAAAAA</Color>
+    <SolidColorBrush x:Key="TextFaintBrush" Color="#AAAAAA"/>
+
+    <Color x:Key="AccentGoldSoftColor">#FAF3E0</Color>
+    <SolidColorBrush x:Key="AccentGoldSoftBrush" Color="#FAF3E0"/>
+    <Color x:Key="AccentGoldSofterColor">#F5E9CF</Color>
+    <SolidColorBrush x:Key="AccentGoldSofterBrush" Color="#F5E9CF"/>
+
+    <Color x:Key="SemanticGreenColor">#2E7D32</Color>
+    <SolidColorBrush x:Key="SemanticGreenBrush" Color="#2E7D32"/>
+    <Color x:Key="SemanticGreenBgColor">#E8F5E9</Color>
+    <SolidColorBrush x:Key="SemanticGreenBgBrush" Color="#E8F5E9"/>
+    <Color x:Key="SemanticOrangeColor">#E65100</Color>
+    <SolidColorBrush x:Key="SemanticOrangeBrush" Color="#E65100"/>
+    <Color x:Key="SemanticOrangeBgColor">#FFF3E0</Color>
+    <SolidColorBrush x:Key="SemanticOrangeBgBrush" Color="#FFF3E0"/>
+    <Color x:Key="SemanticRedColor">#D32F2F</Color>
+    <SolidColorBrush x:Key="SemanticRedBrush" Color="#D32F2F"/>
+
+    <Color x:Key="DiagnosisBgColor">#FFF8E1</Color>
+    <SolidColorBrush x:Key="DiagnosisBgBrush" Color="#FFF8E1"/>
+    <Color x:Key="DiagnosisBorderColor">#FFD579</Color>
+    <SolidColorBrush x:Key="DiagnosisBorderBrush" Color="#FFD579"/>
+
+    <Color x:Key="ScrollThumbColor">#CCCCCC</Color>
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#CCCCCC"/>
+    <Color x:Key="ScrollThumbHoverColor">#C8912A</Color>
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#C8912A"/>
+</ResourceDictionary>

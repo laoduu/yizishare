@@ -1,0 +1,22 @@
+# ===== 构建产物 =====
+bin/
+obj/
+publish/
+dist/
+
+# ===== 工具元数据 =====
+.mimocode/
+
+# ===== IDE / 系统文件 =====
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+Thumbs.db
+Desktop.ini
+
+# ===== 测试 / 临时 =====
+TestResults/
+*.nupkg
