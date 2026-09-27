@@ -13,7 +13,7 @@ public partial class App : WpfApplication
         }
         catch (Exception ex)
         {
-            WpfMessageBox.Show($"启动失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            WpfMessageBox.Show($"启动失败: {ex.Message}\n\n堆栈跟踪:\n{ex.StackTrace}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

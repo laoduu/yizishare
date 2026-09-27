@@ -60,4 +60,12 @@
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#CCCCCC"/>
     <Color x:Key="ScrollThumbHoverColor">#C8912A</Color>
     <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#C8912A"/>
+
+    <!-- 浅色主题标题栏颜色 -->
+    <Color x:Key="HeaderBgColor">#F5F5F5</Color>
+    <SolidColorBrush x:Key="HeaderBgBrush" Color="#F5F5F5"/>
+    <Color x:Key="HeaderTextColor">#333333</Color>
+    <SolidColorBrush x:Key="HeaderTextBrush" Color="#333333"/>
+    <Color x:Key="HeaderSeparatorColor">#E0E0E0</Color>
+    <SolidColorBrush x:Key="HeaderSeparatorBrush" Color="#E0E0E0"/>
 </ResourceDictionary>

@@ -30,6 +30,8 @@ public class DiagnosisCard : Border
     private readonly List<Button> _actionButtons = [];
     private int _runningStep;
     private int _totalSteps;
+    private bool _stepsExpanded = false;
+    private TextBlock? _stepsToggle;
 
     public event EventHandler? FixRequested;
     public event EventHandler? CredentialsRequested;
@@ -44,52 +46,48 @@ public class DiagnosisCard : Border
         BorderBrush = ThemeColors.DiagnosisBorderBrush;
         BorderThickness = new Thickness(1);
         CornerRadius = new CornerRadius(8);
-        Padding = new Thickness(20);
+        Padding = new Thickness(16);
         Margin = new Thickness(0, 0, 0, 12);
 
         var root = new StackPanel();
-        root.Children.Add(new TextBlock
+
+        var titlePanel = new StackPanel { Orientation = Orientation.Horizontal };
+        titlePanel.Children.Add(new TextBlock
         {
-            Text = $"⚠️ {diagnosis.Title}",
-            FontSize = 15,
+            Text = "⚠️",
+            FontSize = 16,
+            Margin = new Thickness(0, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        titlePanel.Children.Add(new TextBlock
+        {
+            Text = diagnosis.Title,
+            FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             Foreground = ThemeColors.SemanticOrangeBrush,
-            Margin = new Thickness(0, 0, 0, 8)
+            VerticalAlignment = VerticalAlignment.Center
         });
-        root.Children.Add(new TextBlock
-        {
-            Text = diagnosis.Description,
-            FontSize = 12,
-            Foreground = ThemeColors.TextSecondaryBrush,
-            TextWrapping = TextWrapping.Wrap
-        });
+        root.Children.Add(titlePanel);
 
-        if (!string.IsNullOrEmpty(diagnosis.Solution))
+        var descText = new TextBlock
         {
-            root.Children.Add(new TextBlock
-            {
-                Text = "💡 解决方案",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = ThemeColors.AccentGoldBrush,
-                Margin = new Thickness(0, 12, 0, 4)
-            });
-            root.Children.Add(new TextBlock
-            {
-                Text = diagnosis.Solution,
-                FontSize = 11,
-                Foreground = ThemeColors.TextSecondaryBrush,
-                TextWrapping = TextWrapping.Wrap
-            });
-        }
+            Text = string.IsNullOrEmpty(diagnosis.Solution)
+                ? diagnosis.Description
+                : $"{diagnosis.Description}\n\n{diagnosis.Solution}",
+            FontSize = 11,
+            Foreground = ThemeColors.TextSecondaryBrush,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        root.Children.Add(descText);
 
         BuildActionButtons();
         root.Children.Add(_actionsPanel);
 
         BuildManualSteps();
         root.Children.Add(_stepsPanel);
+        UpdateStepsVisibility();
 
-        // 执行进度 / 结果 / 日志区
         _progressText = new TextBlock
         {
             FontSize = 11,
@@ -129,7 +127,7 @@ public class DiagnosisCard : Border
 
         var recheckBtn = MakeSecondaryButton("🔄 重新检测");
         recheckBtn.Click += (_, _) => RecheckRequested?.Invoke(this, EventArgs.Empty);
-        var recheckWrap = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
+        var recheckWrap = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
         recheckWrap.Children.Add(recheckBtn);
         root.Children.Add(recheckWrap);
 
@@ -158,7 +156,8 @@ public class DiagnosisCard : Border
 
         if (hasCredential)
         {
-            var btn = MakePrimaryButton("🔑 输入用户名密码连接", ThemeColors.NavyHover);            btn.Click += (_, _) => CredentialsRequested?.Invoke(this, EventArgs.Empty);
+            var btn = MakePrimaryButton("🔑 输入用户名密码连接", ThemeColors.NavyHover);
+            btn.Click += (_, _) => CredentialsRequested?.Invoke(this, EventArgs.Empty);
             _actionsPanel.Children.Add(btn);
             _actionButtons.Add(btn);
         }
@@ -176,14 +175,24 @@ public class DiagnosisCard : Border
         if (_diagnosis.ManualSteps.Count == 0) return;
 
         _stepsPanel.Margin = new Thickness(0, 12, 0, 0);
-        _stepsPanel.Children.Add(new TextBlock
+
+        _stepsToggle = new TextBlock
         {
-            Text = "📋 操作指引",
+            Text = "📋 操作指引 ▶",
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Foreground = ThemeColors.AccentGoldBrush,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
+            Margin = new Thickness(0, 0, 0, 4),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        _stepsToggle.MouseLeftButtonDown += (_, _) =>
+        {
+            _stepsExpanded = !_stepsExpanded;
+            _stepsToggle.Text = _stepsExpanded ? "📋 操作指引 ▼" : "📋 操作指引 ▶";
+            UpdateStepsVisibility();
+        };
+        _stepsPanel.Children.Add(_stepsToggle);
+
         foreach (var step in _diagnosis.ManualSteps)
         {
             _stepsPanel.Children.Add(new TextBlock
@@ -204,6 +213,17 @@ public class DiagnosisCard : Border
         _stepsPanel.Children.Add(copyAll);
     }
 
+    private void UpdateStepsVisibility()
+    {
+        foreach (var child in _stepsPanel.Children)
+        {
+            if (child is TextBlock tb && tb != _stepsToggle)
+                tb.Visibility = _stepsExpanded ? Visibility.Visible : Visibility.Collapsed;
+            else if (child is Button btn)
+                btn.Visibility = _stepsExpanded ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
     private string BuildGuideText()
     {
         var sb = new System.Text.StringBuilder();
@@ -222,7 +242,6 @@ public class DiagnosisCard : Border
         return sb.ToString();
     }
 
-    /// <summary>进入执行态：禁用动作按钮，显示进度与日志区</summary>
     public void SetRunning(int totalSteps)
     {
         _totalSteps = totalSteps;
@@ -235,7 +254,6 @@ public class DiagnosisCard : Border
         _resultText.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>追加一行执行日志；以 ▶ 开头的行视为新步骤并推进进度</summary>
     public void AppendLog(string line)
     {
         if (line.StartsWith("▶"))
@@ -247,7 +265,6 @@ public class DiagnosisCard : Border
         _logBox.ScrollToEnd();
     }
 
-    /// <summary>结束态。成功后由调用方触发复检；失败保留日志供排查</summary>
     public void SetFinished(bool success)
     {
         _progressText.Visibility = Visibility.Collapsed;

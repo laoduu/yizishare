@@ -58,7 +58,7 @@ public class RepairService
                 }
             }
 
-            result.Success = result.Steps.Count > 0 && result.Steps.All(s => s.Success);
+            result.Success = result.Steps.Count == 0 || result.Steps.All(s => s.Success);
             result.LogText = log.ToString();
             return result;
         });

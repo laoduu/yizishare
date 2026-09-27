@@ -4,6 +4,110 @@
 
 ---
 
+## Version 0.5.0 (2024-08-27)
+
+### 新功能
+
+#### 1. MVVM 架构重构
+**新增文件：**
+- `YiziShare.App/ViewModels/ViewModelBase.cs` - INotifyPropertyChanged 基类
+- `YiziShare.App/ViewModels/RelayCommand.cs` - ICommand 实现
+- `YiziShare.App/ViewModels/MainViewModel.cs` - 主窗口 ViewModel
+- `YiziShare.App/ViewModels/DeviceViewModel.cs` - 设备 ViewModel（含主题感知属性）
+- `YiziShare.App/Converters/Converters.cs` - 值转换器（背景/边框/头像/文字颜色）
+
+**架构改进：**
+- 设备列表改用 `ItemsControl` + `DataTemplate` 数据绑定
+- 共享卡片改用 `DataTemplate` 数据绑定
+- 主题切换时自动刷新所有绑定属性
+- 移除代码拼装 UI 逻辑，改用声明式 XAML
+
+#### 2. 设置窗口
+**新增文件：**
+- `YiziShare.App/SettingsWindow.xaml` - 设置界面
+- `YiziShare.App/SettingsWindow.xaml.cs` - 设置逻辑
+- `YiziShare.Core/SettingsStore.cs` - 设置持久化（JSON）
+
+**功能：**
+- 开机自启动（注册表 Run 键）
+- 后台自动刷新开关
+- 刷新间隔配置（分钟）
+- 记住用户名选项
+- 网卡选择
+
+#### 3. 文件浏览器
+**新增文件：**
+- `YiziShare.App/FileBrowserWindow.xaml` - 文件浏览界面
+- `YiziShare.App/FileBrowserWindow.xaml.cs` - 文件浏览逻辑
+
+**功能：**
+- 目录浏览（双击进入）
+- 文件下载（选择目标目录）
+- 文件上传（多选文件）
+- 刷新目录
+
+#### 4. 历史记录
+**新增文件：**
+- `YiziShare.Core/HistoryStore.cs` - 连接历史持久化（JSON）
+
+**功能：**
+- 记录设备最后连接时间
+- 记录连接次数
+- 在设备详情面板显示
+
+#### 5. 日志系统
+**新增文件：**
+- `YiziShare.Core/Logger.cs` - 文件日志
+
+**功能：**
+- 多级别日志（Debug/Info/Warning/Error）
+- 自动日志轮转（5MB）
+- 保存到 `%LocalAppData%\YiziShare\app.log`
+
+#### 6. 高 DPI 适配
+**新增文件：**
+- `YiziShare.App/app.manifest` - DPI 感知声明
+
+**功能：**
+- PerMonitorV2 DPI 感知
+- 支持多显示器不同 DPI
+
+#### 7. CI/CD
+**新增文件：**
+- `.github/workflows/build.yml` - GitHub Actions 工作流
+
+**功能：**
+- 自动构建
+- 自动测试
+- 自动发布
+
+#### 8. 代码规范
+**新增文件：**
+- `.editorconfig` - 编辑器配置
+
+### 修复
+
+| Bug | 原因 | 修复 |
+|-----|------|------|
+| 主题切换后设备卡片颜色不更新 | 转换器缓存 | 改用 ViewModel 属性绑定 |
+| 弹窗阴影畸形 | AllowsTransparency=true | 移除阴影效果 |
+| 按钮 hover 不可见 | 未设置背景色 | 添加 CardHoverBrush 背景 |
+| 设备列表昵称按钮点击无效 | PreviewMouseLeftButtonDown 拦截 | 添加 Button 类型检查 |
+| 状态栏颜色不随主题变化 | 使用静态资源 | 改用 DynamicResource |
+| 构建时 Brush 命名空间冲突 | WinForms 混用 | 添加 using 别名 |
+
+### 测试
+
+**新增测试文件：**
+- `YiziShare.Tests/RepairServiceTests.cs` - 修复服务测试（5 用例）
+- `YiziShare.Tests/HistoryStoreTests.cs` - 历史记录测试（4 用例）
+- `YiziShare.Tests/NetworkScannerTests.cs` - 网络扫描测试（6 用例）
+- `YiziShare.Tests/SettingsStoreTests.cs` - 设置存储测试（7 用例）
+
+**测试总数：** 60 用例全部通过
+
+---
+
 ## Version 0.4.0 (2024-08-24)
 
 ### 新功能

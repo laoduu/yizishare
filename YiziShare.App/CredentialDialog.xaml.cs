@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Security;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -6,7 +8,23 @@ namespace YiziShare.App;
 public partial class CredentialDialog : Window
 {
     public string UserName => UserNameBox.Text.Trim();
-    public string Password => PasswordBox.Password;
+
+    public string Password
+    {
+        get
+        {
+            var secure = PasswordBox.SecurePassword;
+            var ptr = Marshal.SecureStringToBSTR(secure);
+            try
+            {
+                return Marshal.PtrToStringBSTR(ptr);
+            }
+            finally
+            {
+                Marshal.ZeroFreeBSTR(ptr);
+            }
+        }
+    }
 
     public CredentialDialog(string deviceIp, string deviceName,
         string initialUserName = "", string? errorMessage = null)

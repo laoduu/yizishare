@@ -1,35 +1,93 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace YiziShare.Core;
 
-/// <summary>
-/// 局域网设备数据模型
-/// </summary>
-public class Device
+public class Device : INotifyPropertyChanged
 {
-    public string IpAddress { get; set; } = "";
-    public string MacAddress { get; set; } = "";
-    public string HostName { get; set; } = "";
-    public string NickName { get; set; } = ""; // 用户自定义昵称
-    public string Manufacturer { get; set; } = "";
-    public bool IsReachable { get; set; }
-    public bool HasShares { get; set; } // 是否有共享文件夹
-    public DateTime LastSeen { get; set; } = DateTime.Now;
-    public List<SharedFolder> SharedFolders { get; set; } = [];
-    
-    // 诊断结果
-    public SmbDiagnostics.DiagnosisResult? LastDiagnosis { get; set; }
-    
-    // 显示名称：优先用昵称，其次用主机名
+    private string _ipAddress = "";
+    private string _macAddress = "";
+    private string _hostName = "";
+    private string _nickName = "";
+    private string _manufacturer = "";
+    private bool _isReachable;
+    private bool _hasShares;
+    private DateTime _lastSeen = DateTime.Now;
+    private List<SharedFolder> _sharedFolders = [];
+    private SmbDiagnostics.DiagnosisResult? _lastDiagnosis;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string IpAddress
+    {
+        get => _ipAddress;
+        set { _ipAddress = value; OnPropertyChanged(); }
+    }
+
+    public string MacAddress
+    {
+        get => _macAddress;
+        set { _macAddress = value; OnPropertyChanged(); }
+    }
+
+    public string HostName
+    {
+        get => _hostName;
+        set { _hostName = value; OnPropertyChanged(); }
+    }
+
+    public string NickName
+    {
+        get => _nickName;
+        set { _nickName = value; OnPropertyChanged(); }
+    }
+
+    public string Manufacturer
+    {
+        get => _manufacturer;
+        set { _manufacturer = value; OnPropertyChanged(); }
+    }
+
+    public bool IsReachable
+    {
+        get => _isReachable;
+        set { _isReachable = value; OnPropertyChanged(); }
+    }
+
+    public bool HasShares
+    {
+        get => _hasShares;
+        set { _hasShares = value; OnPropertyChanged(); }
+    }
+
+    public DateTime LastSeen
+    {
+        get => _lastSeen;
+        set { _lastSeen = value; OnPropertyChanged(); }
+    }
+
+    public List<SharedFolder> SharedFolders
+    {
+        get => _sharedFolders;
+        set { _sharedFolders = value; OnPropertyChanged(); }
+    }
+
+    public SmbDiagnostics.DiagnosisResult? LastDiagnosis
+    {
+        get => _lastDiagnosis;
+        set { _lastDiagnosis = value; OnPropertyChanged(); }
+    }
+
     public string DisplayName => string.IsNullOrEmpty(NickName) ? HostName : NickName;
-    
-    // 状态描述
-    public string StatusText => LastDiagnosis?.IsAccessible == true 
-        ? $"📁 {SharedFolders.Count} 个共享" 
+
+    public string StatusText => LastDiagnosis?.IsAccessible == true
+        ? $"📁 {SharedFolders.Count} 个共享"
         : (LastDiagnosis == null ? "⏳ 扫描中..." : "⚠️ 无法访问");
+
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
-/// <summary>
-/// 共享文件夹数据模型
-/// </summary>
 public class SharedFolder
 {
     public string ShareName { get; set; } = "";

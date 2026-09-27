@@ -81,7 +81,9 @@ public static class SmbDiagnostics
         {
             // 检测NetBIOS端口(139)：判断是"完全不通"还是"仅旧协议"
             var port139Open = await IsPortOpenAsync(ip, 139, timeoutMs);
-            return BuildPortResult(port139Open, ip);
+            var result = BuildPortResult(port139Open, ip);
+            Logger.Info($"诊断 {ip}: {result.Title}");
+            return result;
         }
 
         // 第2步：IPC$ 连接探测，拿真实 Win32 错误码（不再解析本地化文本输出）
@@ -92,10 +94,16 @@ public static class SmbDiagnostics
         {
             await SmbProbe.DeleteSessionAsync(ip);
             code = await SmbProbe.ProbeIpcAsync(ip);
-            if (code == 0) return BuildAccessible();
+            if (code == 0)
+            {
+                Logger.Info($"诊断 {ip}: 凭据冲突已自动修复");
+                return BuildAccessible();
+            }
         }
 
-        return code == 0 ? BuildAccessible() : BuildFromErrorCode(code, ip);
+        var diagnosis = code == 0 ? BuildAccessible() : BuildFromErrorCode(code, ip);
+        Logger.Info($"诊断 {ip}: {diagnosis.Title} (Win32: {code})");
+        return diagnosis;
     }
 
     private static DiagnosisResult BuildAccessible() => new()

@@ -1,26 +1,38 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
+using YiziShare.App.ViewModels;
 using YiziShare.Core;
+using WinFormsMenuItem = System.Windows.Forms.ToolStripMenuItem;
+using WpfApp = System.Windows.Application;
 
 namespace YiziShare.App;
 
 public partial class MainWindow : Window
 {
-    private readonly NetworkScanner _scanner = new();
-    private readonly ShareFinder _shareFinder = new();
-    private Device? _selectedDevice;
-    private bool _isScanning;
-    private List<Device> _devices = [];
+    private readonly MainViewModel _viewModel;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
+
     public MainWindow()
     {
-        ThemeManager.Load();   // 在渲染前恢复主题偏好
+        ThemeManager.Load();
         InitializeComponent();
-        _scanner.LogMessage += OnLog;
+        _viewModel = (MainViewModel)DataContext;
+        _viewModel.IsDarkTheme = ThemeManager.IsDark;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.StatusMessage))
+        {
+            var message = _viewModel.StatusMessage;
+            if (message.StartsWith("✅ 发现") && _notifyIcon != null)
+            {
+                _notifyIcon.ShowBalloonTip(2000, "YiziShare", message, System.Windows.Forms.ToolTipIcon.Info);
+            }
+        }
     }
 
     #region 系统托盘
@@ -28,9 +40,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var iconPath = System.IO.Path.Combine(
-                AppContext.BaseDirectory, "Assets", "app.ico");
-
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
             if (!System.IO.File.Exists(iconPath)) return;
 
             _notifyIcon = new System.Windows.Forms.NotifyIcon
@@ -42,32 +52,32 @@ public partial class MainWindow : Window
 
             var contextMenu = new System.Windows.Forms.ContextMenuStrip();
             var openItem = new System.Windows.Forms.ToolStripMenuItem("📂 打开YiziShare");
-            openItem.Click += (s, e) => ShowFromTray();
+            openItem.Click += (_, _) => ShowFromTray();
             contextMenu.Items.Add(openItem);
 
             contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-            var scanItem = new System.Windows.Forms.ToolStripMenuItem("🔄 快速扫描");
-            scanItem.Click += async (s, e) => await QuickScanAsync();
+            var scanItem = new WinFormsMenuItem("🔄 快速扫描");
+            scanItem.Click += async (_, _) => await QuickScanAsync();
             contextMenu.Items.Add(scanItem);
 
             contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-            var exitItem = new System.Windows.Forms.ToolStripMenuItem("❌ 退出");
-            exitItem.Click += (s, e) =>
+            var exitItem = new WinFormsMenuItem("❌ 退出");
+            exitItem.Click += (_, _) =>
             {
                 _notifyIcon?.Dispose();
                 _notifyIcon = null;
-                WpfApplication.Current.Shutdown();
+                WpfApp.Current.Shutdown();
             };
             contextMenu.Items.Add(exitItem);
 
             _notifyIcon.ContextMenuStrip = contextMenu;
-            _notifyIcon.MouseDoubleClick += (s, e) => ShowFromTray();
+            _notifyIcon.MouseDoubleClick += (_, _) => ShowFromTray();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"托盘初始化失败: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"托盘初始化失败: {ex.Message}");
         }
     }
 
@@ -81,8 +91,8 @@ public partial class MainWindow : Window
 
     private async Task QuickScanAsync()
     {
-        await ScanNetwork(_scanner.GetLocalSubnet());
-        _notifyIcon?.ShowBalloonTip(2000, "YiziShare", $"扫描完成，发现 {_devices.Count} 台设备", System.Windows.Forms.ToolTipIcon.Info);
+        await _viewModel.ScanNetworkAsync();
+        _notifyIcon?.ShowBalloonTip(2000, "YiziShare", $"扫描完成，发现 {_viewModel.Devices.Count} 台设备", System.Windows.Forms.ToolTipIcon.Info);
     }
     #endregion
 
@@ -92,16 +102,7 @@ public partial class MainWindow : Window
         InitNotifyIcon();
         BtnThemeToggle.Content = ThemeManager.IsDark ? "☀️" : "🌙";
         await NicknameStore.LoadAsync();
-
-        // 加载并应用已保存的昵称
-        foreach (var device in _devices)
-        {
-            var saved = NicknameStore.GetNickname(device.IpAddress);
-            if (!string.IsNullOrEmpty(saved))
-                device.NickName = saved;
-        }
-
-        await ScanNetwork(_scanner.GetLocalSubnet());
+        await _viewModel.ScanNetworkAsync();
     }
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -114,7 +115,6 @@ public partial class MainWindow : Window
     {
         if (WindowState == WindowState.Minimized)
         {
-            // 最小化到托盘
             Hide();
             _notifyIcon?.ShowBalloonTip(1000, "YiziShare", "已最小化到系统托盘，双击图标恢复窗口", System.Windows.Forms.ToolTipIcon.Info);
         }
@@ -122,439 +122,170 @@ public partial class MainWindow : Window
 
     private void BtnScan_Click(object sender, RoutedEventArgs e)
     {
-        if (!_isScanning)
-            _ = ScanNetwork(_scanner.GetLocalSubnet());
+        if (!_viewModel.IsScanning)
+            _ = _viewModel.ScanNetworkAsync();
     }
 
     private void BtnMinimize_Click(object sender, RoutedEventArgs e)
     {
-        // 最小化到托盘
         Hide();
         _notifyIcon?.ShowBalloonTip(1000, "YiziShare", "已最小化到系统托盘，双击图标恢复窗口", System.Windows.Forms.ToolTipIcon.Info);
     }
 
     private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
-        // 关闭也最小化到托盘
         Hide();
     }
 
     private void HeaderBg_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (e.ClickCount >= 2)
-        {
-            // 双击不做最大化（我们没有标题栏了）
-            return;
-        }
+        if (e.ClickCount >= 2) return;
         if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
         {
             DragMove();
         }
     }
 
-    private void BtnSettings_Click(object sender, RoutedEventArgs e)
+    private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        WpfMessageBox.Show("设置功能开发中...", "YiziShare", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (e.Key == System.Windows.Input.Key.F5)
+        {
+            if (!_viewModel.IsScanning)
+                _ = _viewModel.ScanNetworkAsync();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.F && Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            if (RightPanel.Visibility == Visibility.Visible)
+            {
+                CollapseRightPanel();
+                e.Handled = true;
+            }
+        }
     }
 
+    private void CmbGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplySort();
+    }
+
+    private void CmbSort_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        if (_viewModel == null || CmbSort == null) return;
+
+        var devices = _viewModel.Devices.ToList();
+
+        var sortIndex = CmbSort.SelectedIndex;
+        devices = sortIndex switch
+        {
+            1 => devices.OrderBy(d => d.DisplayName).ToList(),
+            2 => devices.OrderBy(d => d.Manufacturer).ThenBy(d => d.IpAddress).ToList(),
+            _ => devices.OrderBy(d => d.IpAddress).ToList()
+        };
+
+        _viewModel.Devices.Clear();
+        foreach (var device in devices)
+            _viewModel.Devices.Add(device);
+    }
+
+    private void BtnSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var settingsWindow = new SettingsWindow(_viewModel) { Owner = this };
+        settingsWindow.ShowDialog();
+    }
+
+    private void BtnThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.ToggleTheme();
+        BtnThemeToggle.Content = ThemeManager.IsDark ? "☀️" : "🌙";
+        foreach (var device in _viewModel.Devices)
+            device.RefreshTheme();
+    }
+
+    private void BtnTogglePanel_Click(object sender, RoutedEventArgs e)
+    {
+        CollapseRightPanel();
+    }
     #endregion
 
     #region QQ风格折叠面板
-    /// <summary>
-    /// 展开右侧面板（同时加宽窗口，并显示标题栏收起按钮）
-    /// </summary>
     private void ExpandRightPanel()
     {
-        Width = 900;
         var parentGrid = (Grid)RightPanel.Parent;
         parentGrid.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
         RightPanel.Visibility = Visibility.Visible;
         BtnTogglePanel.Visibility = Visibility.Visible;
+
+        var animation = new System.Windows.Media.Animation.DoubleAnimation
+        {
+            From = Width,
+            To = 900,
+            Duration = TimeSpan.FromMilliseconds(250),
+            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+        };
+        BeginAnimation(WidthProperty, animation);
     }
 
-    /// <summary>
-    /// 收起右侧面板（同时缩窄窗口，隐藏标题栏收起按钮）
-    /// </summary>
     private void CollapseRightPanel()
     {
         var parentGrid = (Grid)RightPanel.Parent;
         parentGrid.ColumnDefinitions[1].Width = new GridLength(0);
         RightPanel.Visibility = Visibility.Collapsed;
         BtnTogglePanel.Visibility = Visibility.Collapsed;
-        _selectedDevice = null;
+        _viewModel.SelectedDevice = null;
         DeviceInfoPanel.Visibility = Visibility.Collapsed;
-        Width = 320;
-    }
 
-    /// <summary>标题栏 ◀ 按钮：收起右侧面板（原「✕ 收起」已迁移至此）</summary>
-    private void BtnTogglePanel_Click(object sender, RoutedEventArgs e)
-    {
-        CollapseRightPanel();
-    }
-
-    /// <summary>明暗主题切换：换 Surface 字典后重绘代码拼装的界面</summary>
-    private void BtnThemeToggle_Click(object sender, RoutedEventArgs e)
-    {
-        ThemeManager.Toggle();
-        BtnThemeToggle.Content = ThemeManager.IsDark ? "☀️" : "🌙";
-        RenderDeviceList();
-        if (_selectedDevice != null)
-            SelectDevice(_selectedDevice);
-    }
-
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (DeviceListPanel == null) return;
-        foreach (var child in DeviceListPanel.Children.OfType<Border>())
+        var animation = new System.Windows.Media.Animation.DoubleAnimation
         {
-            if (child.Tag is Device device)
-            {
-                var search = SearchBox.Text.ToLower().Trim();
-                var match = string.IsNullOrEmpty(search) ||
-                            device.DisplayName.ToLower().Contains(search) ||
-                            device.IpAddress.ToLower().Contains(search) ||
-                            device.HostName.ToLower().Contains(search) ||
-                            device.NickName.ToLower().Contains(search);
-                child.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
-            }
-        }
+            From = Width,
+            To = 320,
+            Duration = TimeSpan.FromMilliseconds(250),
+            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+        };
+        BeginAnimation(WidthProperty, animation);
     }
     #endregion
 
-    #region 网络扫描
-    private async Task ScanNetwork(string subnet)
+    #region 设备选择与操作
+    private void DeviceListPanel_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        _isScanning = true;
-        BtnScan.IsEnabled = false;
-        SetStatus($"🔍 正在扫描 {subnet}...");
-
-        try
+        if (e.OriginalSource is WpfButton) return;
+        if (e.OriginalSource is FrameworkElement { DataContext: DeviceViewModel device })
         {
-            _devices = await _scanner.ScanAsync(subnet, timeoutMs: 4000);
-
-            // 应用保存的昵称
-            foreach (var device in _devices)
-            {
-                var saved = NicknameStore.GetNickname(device.IpAddress);
-                if (!string.IsNullOrEmpty(saved))
-                    device.NickName = saved;
-            }
-
-            Dispatcher.Invoke(() => RenderDeviceList());
-
-            foreach (var device in _devices)
-                _ = LoadSharesAsync(device);
-
-            SetStatus($"✅ 发现 {_devices.Count} 台设备 | {DateTime.Now:HH:mm:ss}");
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"❌ 扫描失败: {ex.Message}");
-        }
-        finally
-        {
-            _isScanning = false;
-            BtnScan.IsEnabled = true;
+            SelectDevice(device);
         }
     }
 
-    private async Task LoadSharesAsync(Device device)
+    private void SelectDevice(DeviceViewModel device)
     {
-        try
-        {
-            var diagnosis = await SmbDiagnostics.DiagnoseAsync(device.IpAddress, timeoutMs: 3000);
-            device.LastDiagnosis = diagnosis;
-
-            if (diagnosis.IsAccessible)
-            {
-                var shares = await _shareFinder.GetSharesFromIpAsync(device.IpAddress);
-                device.SharedFolders = shares;
-                device.HasShares = shares.Count > 0;
-            }
-            else
-            {
-                device.HasShares = false;
-                device.SharedFolders = [];
-            }
-
-            Dispatcher.Invoke(() =>
-            {
-                RefreshDeviceListItem(device);
-                if (_selectedDevice?.IpAddress == device.IpAddress)
-                    LoadSharesToPanel(device);
-            });
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"加载共享失败 {device.IpAddress}: {ex.Message}");
-        }
-    }
-
-    private void RenderDeviceList()
-    {
-        DeviceListPanel.Children.Clear();
-        if (_devices.Count == 0)
-        {
-            AddEmptyState();
-            return;
-        }
-        foreach (var device in _devices.OrderBy(d => d.IpAddress))
-            AddDeviceItem(device);
-    }
-
-    /// <summary>空态页：logo 水印 + 引导文案（QQ 空会话风格）</summary>
-    private void AddEmptyState()
-    {
-        var panel = new StackPanel
-        {
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new Thickness(0, 70, 0, 0)
-        };
-
-        var logo = new System.Windows.Controls.Image
-        {
-            Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/logo.png")),
-            Width = 64, Height = 64, Opacity = 0.35
-        };
-        RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
-        logo.Clip = new EllipseGeometry(new System.Windows.Point(32, 32), 32, 32);
-        panel.Children.Add(logo);
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = "未发现共享设备",
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = ThemeColors.TextSecondaryBrush,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new Thickness(0, 14, 0, 0)
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = "点击右上角 🔄 重新扫描\n或确认目标设备已开启共享",
-            FontSize = 11,
-            Foreground = ThemeColors.TextTertiaryBrush,
-            TextAlignment = TextAlignment.Center,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            Margin = new Thickness(0, 6, 0, 0)
-        });
-
-        DeviceListPanel.Children.Add(panel);
-    }
-    #endregion
-
-    #region 界面渲染 - 设备项
-    private void AddDeviceItem(Device device)
-    {
-        var isSelected = _selectedDevice == device;
-        var border = new Border
-        {
-            Height = 72,
-            Background = new SolidColorBrush(isSelected ? ThemeColors.AccentGoldSoft : ThemeColors.ListBg),
-            BorderBrush = new SolidColorBrush(isSelected ? ThemeColors.AccentGold : System.Windows.Media.Color.FromArgb(0, 0, 0, 0)),
-            BorderThickness = new Thickness(isSelected ? 3 : 0, 0, 0, 0),
-            CornerRadius = new CornerRadius(12),
-            Cursor = WpfCursors.Hand,
-            Tag = device,
-            Margin = new Thickness(12, 4, 12, 4)
-        };
-
-        var grid = new Grid { Margin = new Thickness(12, 0, 12, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        // 头像
-        var avatarPanel = new Grid { Width = 48, Height = 48 };
-        var avatarBg = new Border
-        {
-            Width = 48, Height = 48,
-            CornerRadius = new CornerRadius(24),
-            Background = new SolidColorBrush(isSelected ? ThemeColors.NavyPrimary : ThemeColors.NavyHover)
-        };
-        var avatarText = new TextBlock
-        {
-            Text = GetDeviceIcon(device),
-            FontSize = 20,
-            Foreground = WpfBrushes.White,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        avatarPanel.Children.Add(avatarBg);
-        avatarPanel.Children.Add(avatarText);
-
-        // 在线状态点
-        var onlineDot = new Ellipse
-        {
-            Width = 14, Height = 14,
-            Fill = new SolidColorBrush(WpfColor.FromRgb(76, 175, 80)),
-            Stroke = WpfBrushes.White,
-            StrokeThickness = 2,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 2, 2)
-        };
-        avatarPanel.Children.Add(onlineDot);
-        grid.Children.Add(avatarPanel);
-
-        // 中间信息
-        var infoPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-
-        var nameRow = new StackPanel { Orientation = WpfOrientation.Horizontal };
-        var nameText = new TextBlock
-        {
-            Text = device.DisplayName,
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(isSelected ? ThemeColors.AccentGold : ThemeColors.TextPrimary),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        var editBtn = new WpfButton
-        {
-            Content = "✏️",
-            FontSize = 12,
-            Style = (Style)FindResource("EditIconButton"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-            ToolTip = "修改昵称"
-        };
-        editBtn.Click += (s, e) => { e.Handled = true; ShowNicknameDialog(device); };
-
-        nameRow.Children.Add(nameText);
-        nameRow.Children.Add(editBtn);
-        infoPanel.Children.Add(nameRow);
-
-        infoPanel.Children.Add(new TextBlock
-        {
-            Text = $"{device.IpAddress} • {device.Manufacturer}",
-            FontSize = 11,
-            Foreground = ThemeColors.TextTertiaryBrush,
-            Margin = new Thickness(0, 3, 0, 0)
-        });
-
-        var statusTb = new TextBlock
-        {
-            Text = device.StatusText,
-            FontSize = 10,
-            Foreground = ThemeColors.TextFaintBrush,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-        infoPanel.Children.Add(statusTb);
-
-        Grid.SetColumn(infoPanel, 1);
-        grid.Children.Add(infoPanel);
-
-        // 右侧警告或箭头
-        if (device.LastDiagnosis != null && !device.LastDiagnosis.IsAccessible)
-        {
-            var warnBtn = new WpfButton
-            {
-                Content = "⚠️",
-                FontSize = 16,
-                Background = WpfBrushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = WpfCursors.Hand,
-                Margin = new Thickness(0, 0, 4, 0),
-                ToolTip = device.LastDiagnosis.Title
-            };
-            // 点击警告=选中设备，进入详情面板查看统一修复卡
-            warnBtn.Click += (s, e) => { e.Handled = true; SelectDevice(device); };
-            Grid.SetColumn(warnBtn, 2);
-            grid.Children.Add(warnBtn);
-        }
-        else if (device.HasShares)
-        {
-            var arrow = new TextBlock
-            {
-                Text = "▶",
-                FontSize = 10,
-                Foreground = ThemeColors.TextFaintBrush,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(arrow, 2);
-            grid.Children.Add(arrow);
-        }
-
-        border.Child = grid;
-
-        // 右键菜单（QQ 会话右键风格）
-        var menu = new ContextMenu();
-        var openAllItem = new MenuItem
-        {
-            Header = "📂 打开全部共享",
-            IsEnabled = device.SharedFolders.Count > 0
-        };
-        openAllItem.Click += (s, e) => { foreach (var share in device.SharedFolders) OpenShare(share); };
-        var recheckItem = new MenuItem { Header = "🔄 重新检测" };
-        recheckItem.Click += (s, e) => OnDiagnosisRecheck(device);
-        var nickItem = new MenuItem { Header = "✏️ 修改昵称" };
-        nickItem.Click += (s, e) => ShowNicknameDialog(device);
-        menu.Items.Add(openAllItem);
-        menu.Items.Add(recheckItem);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(nickItem);
-        border.ContextMenu = menu;
-
-        // 悬停
-        border.MouseEnter += (s, e) =>
-        {
-            editBtn.Opacity = 1;
-            if (!isSelected)
-                border.Background = ThemeColors.AccentGoldSoftBrush;
-        };
-        border.MouseLeave += (s, e) =>
-        {
-            editBtn.Opacity = 0;
-            if (!isSelected)
-                border.Background = ThemeColors.ListBgBrush;
-        };
-
-        border.MouseLeftButtonDown += (s, e) => SelectDevice(device);
-        DeviceListPanel.Children.Add(border);
-    }
-
-    private void RefreshDeviceListItem(Device device)
-    {
-        for (int i = 0; i < DeviceListPanel.Children.Count; i++)
-        {
-            if (DeviceListPanel.Children[i] is Border border && border.Tag is Device d && d.IpAddress == device.IpAddress)
-            {
-                DeviceListPanel.Children.RemoveAt(i);
-                AddDeviceItem(device);
-                var newItem = DeviceListPanel.Children[DeviceListPanel.Children.Count - 1];
-                DeviceListPanel.Children.Remove(newItem);
-                DeviceListPanel.Children.Insert(i, newItem);
-                break;
-            }
-        }
-    }
-    #endregion
-
-    #region 界面渲染 - 详情面板
-    private void SelectDevice(Device device)
-    {
-        // 展开右侧面板（QQ风格：点击设备后展开对话面板）
         ExpandRightPanel();
-
-        _selectedDevice = device;
-
-        // 更新选中状态
-        foreach (var child in DeviceListPanel.Children.OfType<Border>())
-        {
-            if (child.Tag is Device d)
-            {
-                var selected = d.IpAddress == device.IpAddress;
-                child.Background = new SolidColorBrush(selected ? ThemeColors.AccentGoldSofter : ThemeColors.ListBg);
-                child.BorderBrush = new SolidColorBrush(selected ? ThemeColors.AccentGold : System.Windows.Media.Color.FromArgb(0, 0, 0, 0));
-                child.BorderThickness = new Thickness(selected ? 3 : 0, 0, 0, 1);
-            }
-        }
-
+        _viewModel.SelectedDevice = device;
         DeviceInfoPanel.Visibility = Visibility.Visible;
+        UpdateDeviceInfoPanel(device);
+    }
+
+    private void UpdateDeviceInfoPanel(DeviceViewModel device)
+    {
         DeviceTitle.Text = device.DisplayName;
         DeviceIp.Text = $"📌 {device.IpAddress}";
         DeviceMac.Text = $"🔗 {device.MacAddress}";
-        DeviceAvatarIcon.Text = GetDeviceIcon(device);
+        DeviceAvatarIcon.Text = GetDeviceIcon(device.Model);
+
+        var history = HistoryStore.GetEntry(device.IpAddress);
+        DeviceLastSeen.Text = history != null
+            ? $"最后连接: {history.LastSeen:yyyy-MM-dd HH:mm} | 连接次数: {history.ConnectCount}"
+            : "";
 
         if (device.LastDiagnosis?.IsAccessible == true)
         {
@@ -562,6 +293,7 @@ public partial class MainWindow : Window
             StatusText.Foreground = ThemeColors.SemanticGreenBrush;
             StatusText.Text = "🟢 已连接";
             BtnOpenAll.Visibility = device.SharedFolders.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BtnBrowse.Visibility = device.SharedFolders.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         else if (device.LastDiagnosis != null)
         {
@@ -569,6 +301,7 @@ public partial class MainWindow : Window
             StatusText.Foreground = ThemeColors.SemanticOrangeBrush;
             StatusText.Text = "🟠 " + device.LastDiagnosis.Title;
             BtnOpenAll.Visibility = Visibility.Collapsed;
+            BtnBrowse.Visibility = Visibility.Collapsed;
         }
         else
         {
@@ -576,203 +309,81 @@ public partial class MainWindow : Window
             StatusText.Foreground = ThemeColors.TextTertiaryBrush;
             StatusText.Text = "⏳ 扫描中...";
             BtnOpenAll.Visibility = Visibility.Collapsed;
+            BtnBrowse.Visibility = Visibility.Collapsed;
         }
-
-        LoadSharesToPanel(device);
     }
 
-    private void LoadSharesToPanel(Device device)
+    private void BtnEditNickname_Click(object sender, RoutedEventArgs e)
     {
-        ShareContentPanel.Children.Clear();
-
-        if (device.LastDiagnosis != null && !device.LastDiagnosis.IsAccessible)
-        {
-            var card = new DiagnosisCard(device.LastDiagnosis, device.IpAddress);
-            card.FixRequested += async (_, _) => await OnFixRequestedAsync(device, card);
-            card.CredentialsRequested += async (_, _) => await OnCredentialsRequestAsync(device);
-            card.RecheckRequested += (_, _) => OnDiagnosisRecheck(device);
-            ShareContentPanel.Children.Add(card);
-            return;
-        }
-
-        if (device.SharedFolders.Count == 0)
-        {
-            var emptyPanel = new StackPanel
-            {
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                Margin = new Thickness(0, 30, 0, 0)
-            };
-            emptyPanel.Children.Add(new TextBlock
-            {
-                FontFamily = new WpfFontFamily("Segoe MDL2 Assets"),
-                Text = "\uE8B7",
-                FontSize = 26,
-                Foreground = ThemeColors.TextFaintBrush,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-            });
-            emptyPanel.Children.Add(new TextBlock
-            {
-                Text = "该设备暂无共享文件夹",
-                Foreground = ThemeColors.TextTertiaryBrush,
-                FontSize = 13,
-                Margin = new Thickness(0, 8, 0, 0)
-            });
-            ShareContentPanel.Children.Add(emptyPanel);
-            return;
-        }
-
-        foreach (var share in device.SharedFolders)
-            ShareContentPanel.Children.Add(CreateShareCard(share));
+        if (_viewModel.SelectedDevice != null)
+            ShowNicknameDialog(_viewModel.SelectedDevice);
     }
 
-    private UIElement CreateShareCard(SharedFolder share)
+    private void BtnBrowse_Click(object sender, RoutedEventArgs e)
     {
-        var border = new Border
+        if (_viewModel.SelectedDevice?.SharedFolders.Count > 0)
         {
-            Background = ThemeColors.CardBgBrush,
-            BorderBrush = ThemeColors.CardBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14),
-            Margin = new Thickness(0, 0, 0, 8),
-            Cursor = WpfCursors.Hand
-        };
-        border.Effect = new System.Windows.Media.Effects.DropShadowEffect
-        {
-            BlurRadius = 8,
-            ShadowDepth = 1,
-            Direction = 270,
-            Color = System.Windows.Media.Color.FromArgb(15, 0, 0, 0),
-            Opacity = 0.3
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        grid.Children.Add(new TextBlock
-        {
-            FontFamily = new WpfFontFamily("Segoe MDL2 Assets"),
-            Text = "\uE8B7",   // Folder 单色字形，随主题着色（emoji 为固定彩色，深色下不可见）
-            FontSize = 20,
-            Foreground = ThemeColors.AccentGoldBrush,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 12, 0)
-        });
-
-        var infoPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        infoPanel.Children.Add(new TextBlock { Text = share.ShareName, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = ThemeColors.TextPrimaryBrush });
-        infoPanel.Children.Add(new TextBlock { Text = share.Path, FontSize = 10, Foreground = ThemeColors.TextFaintBrush, Margin = new Thickness(0, 2, 0, 0) });
-        Grid.SetColumn(infoPanel, 1);
-        grid.Children.Add(infoPanel);
-
-        var openBtn = new WpfButton
-        {
-            Content = "打开",
-            Style = (Style)FindResource("GlassButton"),
-            Background = ThemeColors.AccentGoldBrush,
-            Padding = new Thickness(12, 5, 12, 5),
-            FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        openBtn.Click += (s, e) => OpenShare(share);
-        Grid.SetColumn(openBtn, 2);
-        grid.Children.Add(openBtn);
-
-        border.Child = grid;
-        border.MouseEnter += (s, e) => border.Background = ThemeColors.CardHoverBrush;
-        border.MouseLeave += (s, e) => border.Background = ThemeColors.CardBgBrush;
-        border.MouseLeftButtonDown += (s, e) => { if (e.ClickCount >= 2) OpenShare(share); };
-
-        return border;
-    }
-    #endregion
-
-    #region 诊断修复
-    /// <summary>「我修好了，重新检测」/ 修复后自动复检</summary>
-    private void OnDiagnosisRecheck(Device device)
-    {
-        SetStatus($"🔄 正在重新检测 {device.IpAddress} ...");
-        _ = LoadSharesAsync(device);
-    }
-
-    /// <summary>需要登录：应用内凭据对话框 → 建立连接 → 复检。密码仅在内存中传递。</summary>
-    private async Task OnCredentialsRequestAsync(Device device)
-    {
-        string lastUser = "";
-        string? lastError = null;
-
-        for (int attempt = 0; attempt < 3; attempt++)
-        {
-            var dlg = new CredentialDialog(device.IpAddress, device.DisplayName, lastUser, lastError) { Owner = this };
-            if (dlg.ShowDialog() != true) return;   // 用户取消
-
-            lastUser = dlg.UserName;
-            SetStatus($"🔑 正在连接 {device.IpAddress} ...");
-
-            var code = await SmbProbe.ProbeIpcAsync(device.IpAddress, dlg.UserName, dlg.Password);
-            if (code == 0)
-            {
-                // 会话已建立，复检会直接通过并枚举出共享
-                OnDiagnosisRecheck(device);
-                return;
-            }
-
-            lastError = code is 1326 or 86
-                ? "用户名或密码错误，请重试（账号格式通常为 " + device.IpAddress + @"\用户名）"
-                : $"连接失败（Win32 错误码 {code}）";
+            var firstShare = _viewModel.SelectedDevice.SharedFolders[0];
+            var browser = new FileBrowserWindow(firstShare.Path) { Owner = this };
+            browser.ShowDialog();
         }
-        SetStatus($"❌ {device.IpAddress} 连接未成功，可稍后重试");
     }
 
-    /// <summary>一键修复：风险确认 → UAC 提权逐条执行 → 无论成败都复检刷新界面</summary>
-    private async Task OnFixRequestedAsync(Device device, DiagnosisCard card)
+    private void BtnOpenAll_Click(object sender, RoutedEventArgs e)
     {
-        var diagnosis = device.LastDiagnosis;
-        if (diagnosis == null) return;
+        _viewModel.OpenAllCommand.Execute(null);
+    }
 
-        var risky = diagnosis.Actions.FirstOrDefault(a => !string.IsNullOrEmpty(a.RiskNote));
-        if (risky?.RiskNote != null)
-        {
-            var confirm = WpfMessageBox.Show(
-                risky.RiskNote + "\n\n确定要继续吗？",
-                "执行前请确认", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (confirm != MessageBoxResult.Yes) return;
-        }
+    private void OpenShare_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is WpfButton btn && btn.DataContext is SharedFolder share)
+            _viewModel.OpenShareCommand.Execute(share);
+    }
 
-        var actions = diagnosis.Actions
-            .Where(a => a.Kind is FixActionKind.Cmd or FixActionKind.PowerShell or FixActionKind.DeleteNetSession)
-            .ToList();
-        if (actions.Count == 0) return;
+    private void OpenAllShares_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.OpenAllCommand.Execute(null);
+    }
 
-        card.SetRunning(actions.Count);
-        SetStatus($"🛠 正在对 {device.IpAddress} 执行一键修复...");
+    private void Recheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem && menuItem.DataContext is DeviceViewModel device)
+            _viewModel.RecheckCommand.Execute(device);
+    }
 
-        var service = new RepairService();
-        service.LogMessage += (_, line) => Dispatcher.Invoke(() => card.AppendLog(line));
-        var result = await service.ExecuteAllAsync(actions);
-
-        card.SetFinished(result.Success);
-        OnDiagnosisRecheck(device);
+    private void EditNickname_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem && menuItem.DataContext is DeviceViewModel device)
+            ShowNicknameDialog(device);
     }
     #endregion
 
     #region 对话框
-    private void ShowNicknameDialog(Device device)
+    private void ShowNicknameDialog(DeviceViewModel device)
     {
         var dlg = new Window
         {
             Title = "修改昵称",
-            Width = 360, Height = 200,
+            Width = 360, Height = 180,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             Background = ThemeColors.CardBgBrush,
-            ResizeMode = ResizeMode.NoResize
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true
         };
 
-        var stack = new StackPanel { Margin = new Thickness(24) };
-        stack.Children.Add(new TextBlock { Text = $"为 {device.IpAddress} 设置昵称：", Margin = new Thickness(0, 0, 0, 8), Foreground = ThemeColors.TextSecondaryBrush });
+        var border = new Border
+        {
+            Background = ThemeColors.CardBgBrush,
+            CornerRadius = new CornerRadius(12),
+            BorderBrush = ThemeColors.CardBorderBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(24)
+        };
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = $"为 {device.IpAddress} 设置昵称：", Margin = new Thickness(0, 0, 0, 10), Foreground = ThemeColors.TextSecondaryBrush });
 
         var textBox = new WpfTextBox
         {
@@ -785,14 +396,13 @@ public partial class MainWindow : Window
         };
         stack.Children.Add(textBox);
 
-        // 按钮区域
         var cancelBtn = new WpfButton
         {
             Content = "取消",
             Style = (Style)this.FindResource("SecondaryGlassButton"),
             Padding = new Thickness(20, 8, 20, 8)
         };
-        cancelBtn.Click += (s, e) => dlg.Close();
+        cancelBtn.Click += (_, _) => dlg.Close();
 
         var okBtn = new WpfButton
         {
@@ -801,54 +411,37 @@ public partial class MainWindow : Window
             Padding = new Thickness(20, 8, 20, 8),
             Margin = new Thickness(12, 0, 0, 0)
         };
-        okBtn.Click += async (s, e) =>
+        okBtn.Click += async (_, _) =>
         {
             var newName = textBox.Text.Trim();
-            device.NickName = newName;
-            await NicknameStore.SetNickname(device.IpAddress, newName);
+            if (newName.Length > 20)
+            {
+                System.Windows.MessageBox.Show("昵称不能超过 20 个字符", "提示", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(newName, @"^[\w\u4e00-\u9fa5\-]+$"))
+            {
+                System.Windows.MessageBox.Show("昵称只能包含字母、数字、中文、下划线和短横线", "提示", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            _viewModel.ApplyNickname(device, newName);
             dlg.Close();
-            RenderDeviceList();
-            if (_selectedDevice?.IpAddress == device.IpAddress)
-                SelectDevice(device);
+            UpdateDeviceInfoPanel(device);
         };
 
-        var btnStack = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        var btnStack = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = WpfHorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
         btnStack.Children.Add(okBtn);
         btnStack.Children.Add(cancelBtn);
 
-        stack.Children.Add(new TextBlock { Margin = new Thickness(0, 16, 0, 0) }); // spacer
         stack.Children.Add(btnStack);
 
-        dlg.Content = stack;
+        border.Child = stack;
+        dlg.Content = border;
         dlg.ShowDialog();
     }
     #endregion
 
-    #region 操作
-    private void BtnOpenAll_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selectedDevice == null) return;
-        foreach (var share in _selectedDevice.SharedFolders)
-            OpenShare(share);
-    }
-
-    private void BtnEditNickname_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selectedDevice != null) ShowNicknameDialog(_selectedDevice);
-    }
-
-    private void OpenShare(SharedFolder share)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = share.Path, UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            WpfMessageBox.Show($"无法打开: {share.Path}\n{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
+    #region 辅助方法
     private string GetDeviceIcon(Device device)
     {
         var mac = device.MacAddress.Replace(":", "").ToUpper();
@@ -860,9 +453,5 @@ public partial class MainWindow : Window
         if (device.Manufacturer.Contains("TP") || device.Manufacturer.Contains("Tenda")) return "📡";
         return "💻";
     }
-
-    private void SetStatus(string message) => BottomStatus.Text = message;
-
-    private void OnLog(object? sender, string message) => Dispatcher.Invoke(() => BottomStatus.Text = message);
     #endregion
 }

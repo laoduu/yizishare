@@ -1,0 +1,99 @@
+<Window x:Class="YiziShare.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource CardBgBrush}"
+        FontFamily="Microsoft YaHei UI, Segoe UI, Arial"
+        ShowInTaskbar="False">
+    <Window.Resources>
+        <Style x:Key="SettingsPrimaryButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource AccentGoldBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentGoldHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentGoldPressedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SettingsSecondaryButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SecondaryBtnBgBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnPressedBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="28,24,28,20">
+        <TextBlock Text="⚙️ 设置" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+
+        <TextBlock Text="常规" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+        <CheckBox x:Name="ChkAutoStart" Content="开机自动启动" FontSize="13"
+                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+
+        <CheckBox x:Name="ChkAutoRefresh" Content="启用后台自动刷新" FontSize="13"
+                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+            <TextBlock Text="刷新间隔：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            <TextBox x:Name="TxtRefreshInterval" Width="60" FontSize="13" Padding="8,6" Margin="8,0"
+                     Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderThickness="0"/>
+            <TextBlock Text="分钟" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <TextBlock Text="网络" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+            <TextBlock Text="选择网卡：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            <ComboBox x:Name="CmbNetworkAdapter" Width="220" FontSize="13" Padding="8,6" Margin="8,0"
+                      Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}"/>
+        </StackPanel>
+
+        <TextBlock Text="凭据" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+        <CheckBox x:Name="ChkRememberUsername" Content="记住上次输入的用户名" FontSize="13"
+                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnCancel" Content="取消" Style="{StaticResource SettingsSecondaryButton}"
+                    Padding="20,8" Click="BtnCancel_Click"/>
+            <Button x:Name="BtnSave" Content="保存" Style="{StaticResource SettingsPrimaryButton}"
+                    Padding="20,8" Margin="12,0,0,0" Click="BtnSave_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

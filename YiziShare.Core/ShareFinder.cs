@@ -17,7 +17,10 @@ public class ShareFinder
         // 且与 IPC$ 会话共用同一认证上下文（凭据连接成功后即可直接枚举）
         var shares = await SmbProbe.EnumSharesViaNetShareEnumAsync(ip);
         if (shares.Count > 0)
+        {
+            Logger.Info($"NetShareEnum 成功枚举 {ip} 的 {shares.Count} 个共享");
             return shares;
+        }
 
         // 兜底：个别老旧 NAS/嵌入式设备 RPC 受限但响应 net view
         try
@@ -43,7 +46,7 @@ public class ShareFinder
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"获取 {ip} 共享失败: {ex.Message}");
+            Logger.Error($"获取 {ip} 共享失败", ex);
         }
 
         return shares;

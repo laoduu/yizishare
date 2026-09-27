@@ -58,6 +58,7 @@ public class NetworkScanner
         var devices = new ConcurrentDictionary<string, Device>(StringComparer.OrdinalIgnoreCase);
 
         OnLog($"开始扫描子网: {subnet}");
+        Logger.Info($"开始扫描子网: {subnet}");
 
         // 方法1: 读取现有 ARP 缓存
         ScanArpCache(devices);
@@ -71,8 +72,9 @@ public class NetworkScanner
 
         // 过滤：只返回有共享文件夹的设备
         var devicesWithShares = devices.Values.Where(d => d.HasShares || d.SharedFolders.Count > 0).ToList();
-        
+
         OnLog($"扫描完成，发现 {devices.Count} 台设备，其中 {devicesWithShares.Count} 台有共享");
+        Logger.Info($"扫描完成，发现 {devices.Count} 台设备，其中 {devicesWithShares.Count} 台有共享");
         return devicesWithShares;
     }
 
@@ -343,5 +345,28 @@ public class NetworkScanner
         return props.UnicastAddresses.Any(u =>
             u.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
             && !IpRangeUtil.IsApipa(u.Address));
+    }
+
+    /// <summary>获取所有可用网卡的名称和 IP 地址</summary>
+    public static List<string> GetUsableNetworkAdapters()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(IsUsableIpv4Nic)
+                .Select(n =>
+                {
+                    var ip = n.GetIPProperties().UnicastAddresses
+                        .FirstOrDefault(u => u.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                                             && !IpRangeUtil.IsApipa(u.Address))
+                        ?.Address;
+                    return ip != null ? $"{n.Name} ({ip})" : n.Name;
+                })
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
     }
 }
