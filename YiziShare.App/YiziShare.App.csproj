@@ -16,7 +16,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- logo 与表情编入程序集：Content+单文件发布下 pack URI 解析不可靠，曾导致头部 logo 永远空白 -->
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\Emoji\**" />
+    <!-- ico 必须是松散文件：托盘按 BaseDirectory 文件路径加载 -->
+    <Content Include="Assets\app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

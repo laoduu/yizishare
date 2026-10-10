@@ -47,8 +47,18 @@ public static class IpRangeUtil
     {
         var bytes = ip.GetAddressBytes();
         uint ipInt = ToUInt(bytes);
-        uint mask = prefixLen <= 0 ? 0 : prefixLen >= 32 ? 0xFFFFFFFFu : 0xFFFFFFFFu << (32 - prefixLen);
-        return FromUInt(ipInt & mask);
+        return FromUInt(ipInt & ToMask(prefixLen));
+    }
+
+    /// <summary>
+    /// 计算子网的定向广播地址（网络地址 OR 按位取反的掩码）
+    /// 例如 192.168.1.0/24 → 192.168.1.255
+    /// </summary>
+    public static IPAddress BroadcastAddress(IPAddress network, int prefixLen)
+    {
+        var bytes = NormalizeNetwork(network, prefixLen).GetAddressBytes();
+        uint ipInt = ToUInt(bytes);
+        return FromUInt(ipInt | ~ToMask(prefixLen));
     }
 
     /// <summary>IPv4 → CIDR 子网字符串，如 192.168.1.37 → "192.168.1.0/24"</summary>
@@ -73,6 +83,9 @@ public static class IpRangeUtil
                              && !IsApipa(g));
 
     private static uint ToUInt(byte[] b) => (uint)(b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3]);
+
+    private static uint ToMask(int prefixLen)
+        => prefixLen <= 0 ? 0 : prefixLen >= 32 ? 0xFFFFFFFFu : 0xFFFFFFFFu << (32 - prefixLen);
 
     private static IPAddress FromUInt(uint v) => new([(byte)((v >> 24) & 0xFF), (byte)((v >> 16) & 0xFF),
                                                      (byte)((v >> 8) & 0xFF), (byte)(v & 0xFF)]);

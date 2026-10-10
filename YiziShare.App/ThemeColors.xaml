@@ -1,5 +1,9 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:conv="clr-namespace:YiziShare.App.Converters">
+
+    <!-- 全局值转换器 -->
+    <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     <!--
         品牌层（明暗主题共用）：黑金取色自 Assets/app.ico
         表面层（随主题切换）见 Surface.Light.xaml / Surface.Dark.xaml，由 ThemeManager 运行时替换
@@ -178,6 +182,133 @@
         <Setter Property="ResizeMode" Value="NoResize"/>
     </Style>
 
+    <!-- 主按钮（金色底 + 白字，hover/按下用黑色遮罩加深，不覆盖按钮自身背景色） -->
+    <Style x:Key="GlassButton" TargetType="Button">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <Border.BorderBrush>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#33FFFFFF" Offset="0"/>
+                                    <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.BorderBrush>
+                            <Border.BorderThickness>1</Border.BorderThickness>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="hoverMask" CornerRadius="10" Background="Black" Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="hoverMask" Property="Opacity" Value="0.08"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="hoverMask" Property="Opacity" Value="0.16"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 次要玻璃按钮 -->
+    <Style x:Key="SecondaryGlassButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SecondaryBtnBgBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnPressedBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 工具栏图标按钮 -->
+    <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource HeaderTextBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Opacity" Value="0.92"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                            <Setter Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource CardBorderBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== MDL2 图标体系（Segoe MDL2 Assets，Win10+ 内置矢量字体，主题色渲染） ===== -->
+    <Style x:Key="Mdl2Glyph" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ===== 文件夹/文件矢量图标（全应用统一：共享卡片列表 + 内置文件浏览） ===== -->
+    <!-- 文件夹图标：金色矢量，与应用主题同色 -->
+    <DataTemplate x:Key="FolderIconTemplate">
+        <Grid Width="26" Height="22">
+            <Path Data="M1,7 C1,5.9 1.9,5 3,5 L10,5 L12.5,7.5 L23,7.5 C24.1,7.5 25,8.4 25,9.5 L25,18.5 C25,19.6 24.1,20.5 23,20.5 L3,20.5 C1.9,20.5 1,19.6 1,18.5 Z"
+                  Fill="{DynamicResource AccentGoldBrush}"/>
+            <Path Data="M1,9.5 L25,9.5 L25,11 L1,11 Z" Fill="#FFFFFF" Opacity="0.25"/>
+        </Grid>
+    </DataTemplate>
+
+    <!-- 文件图标：浅色纸页 + 金色折角 -->
+    <DataTemplate x:Key="FileIconTemplate">
+        <Grid Width="26" Height="22">
+            <Path Data="M5,1 L17,1 L23,7 L23,21 L5,21 Z" Fill="#FFFFFF" Stroke="{DynamicResource CardBorderBrush}" StrokeThickness="1"/>
+            <Path Data="M17,1 L17,7 L23,7 Z" Fill="{DynamicResource AccentGoldBrush}" Opacity="0.85"/>
+        </Grid>
+    </DataTemplate>
+
+    <!-- ===== 头部紧凑图标按钮：默认宽 320px 时 6 个 30px 按钮会挤出关闭键 ===== -->
+    <Style x:Key="HeaderIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
     <!-- ===== ComboBox 样式 ===== -->
     <Style TargetType="ComboBox">
         <Setter Property="Background" Value="{DynamicResource InputBgBrush}"/>
@@ -201,17 +332,23 @@
                                             BorderBrush="{TemplateBinding BorderBrush}"
                                             BorderThickness="{TemplateBinding BorderThickness}"
                                             CornerRadius="6">
-                                        <Grid>
-                                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
-                                            <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                  Margin="0,0,8,0" Fill="{DynamicResource TextSecondaryBrush}"
-                                                  Data="M 0 0 L 4 4 L 8 0 Z"/>
-                                        </Grid>
+                                        <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Margin="0,0,8,0" Fill="{DynamicResource TextSecondaryBrush}"
+                                              Data="M 0 0 L 4 4 L 8 0 Z"/>
                                     </Border>
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <Popup x:Name="Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" StaysOpen="False">
+                        <!-- 选中值显示层：必须绑定 SelectionBoxItem。
+                             此前模板漏了这一层，下拉框永远显示空白（筛选/排序/网卡选择全中招） -->
+                        <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Left" VerticalAlignment="Center"
+                                          IsHitTestVisible="False"/>
+                        <!-- AllowsTransparency：否则不透明弹出层会在圆角外露出黑色角落 -->
+                        <Popup x:Name="Popup" AllowsTransparency="True" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" StaysOpen="False">
                             <Border Background="{DynamicResource CardBgBrush}"
                                     BorderBrush="{DynamicResource CardBorderBrush}"
                                     BorderThickness="1" CornerRadius="6"

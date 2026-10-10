@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置"
-        Width="420" SizeToContent="Height"
+        Width="420" Height="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="{DynamicResource CardBgBrush}"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         FontFamily="Microsoft YaHei UI, Segoe UI, Arial"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
     <Window.Resources>
         <Style x:Key="SettingsPrimaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
@@ -57,43 +58,159 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- 设置页 tab 按钮：透明底，选中金色文字 -->
+        <Style x:Key="SettingsTabButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0,9"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="MenuGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
     </Window.Resources>
-    <StackPanel Margin="28,24,28,20">
-        <TextBlock Text="⚙️ 设置" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
 
-        <TextBlock Text="常规" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+    <!-- 金色 UI 外壳：圆角 + 深色标题栏（自绘，无系统边框） -->
+    <Border CornerRadius="16" Background="{DynamicResource PanelBgBrush}"
+            BorderBrush="{DynamicResource WindowEdgeBrush}" BorderThickness="1">
+        <StackPanel>
+            <!-- 标题栏 -->
+            <Border CornerRadius="15,15,0,0" Background="{DynamicResource HeaderBgBrush}"
+                    BorderBrush="{DynamicResource HeaderSeparatorBrush}" BorderThickness="0,0,0,1">
+                <Grid Margin="16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="设置" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource HeaderTextBrush}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Width="26" Height="26" Margin="0,8" Click="BtnClose_Click" ToolTip="关闭"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            Foreground="{DynamicResource HeaderTextBrush}">
+                        <TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE8BB;" FontSize="12"/>
+                    </Button>
+                </Grid>
+            </Border>
 
-        <CheckBox x:Name="ChkAutoStart" Content="开机自动启动" FontSize="13"
-                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <!-- 常规 / 关于 切换条 + 金色指示条 -->
+            <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="BtnTabGeneral" Content="常规" Style="{StaticResource SettingsTabButton}"
+                            Foreground="{DynamicResource AccentGoldBrush}" Click="BtnTabGeneral_Click"/>
+                    <Button x:Name="BtnTabAbout" Grid.Column="1" Content="关于" Style="{StaticResource SettingsTabButton}"
+                            Click="BtnTabAbout_Click"/>
+                    <Border x:Name="TabIndicator" Height="2" VerticalAlignment="Bottom"
+                            Background="{DynamicResource AccentGoldBrush}" Width="56"
+                            HorizontalAlignment="Center"/>
+                </Grid>
+            </Border>
 
-        <CheckBox x:Name="ChkAutoRefresh" Content="启用后台自动刷新" FontSize="13"
-                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+            <!-- ===== 常规 tab ===== -->
+            <StackPanel x:Name="TabGeneral" Margin="24,18,24,18">
+                <TextBlock Text="常规" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
 
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-            <TextBlock Text="刷新间隔：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-            <TextBox x:Name="TxtRefreshInterval" Width="60" FontSize="13" Padding="8,6" Margin="8,0"
-                     Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderThickness="0"/>
-            <TextBlock Text="分钟" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                <!-- 我的昵称：广播给局域网对端（优先级低于好友备注） -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="我的昵称：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtMyNickname" Width="200" FontSize="13" Padding="8,6" Margin="8,0"
+                             MaxLength="32"
+                             Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderThickness="0"/>
+                    <TextBlock Text="留空显示计算机名" FontSize="10" Foreground="{DynamicResource TextFaintBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <CheckBox x:Name="ChkAutoStart" Content="开机自动启动" FontSize="13"
+                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+
+                <CheckBox x:Name="ChkAutoRefresh" Content="启用后台自动刷新" FontSize="13"
+                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                    <TextBlock Text="刷新间隔：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtRefreshInterval" Width="60" FontSize="13" Padding="8,6" Margin="8,0"
+                             Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderThickness="0"/>
+                    <TextBlock Text="分钟" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <TextBlock Text="网络" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                    <TextBlock Text="选择网卡：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbNetworkAdapter" Width="220" FontSize="13" Padding="8,6" Margin="8,0"
+                              Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </StackPanel>
+
+                <TextBlock Text="聊天" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+                <CheckBox x:Name="ChkChatSound" Content="收到消息时播放提示音" FontSize="13"
+                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+
+                <TextBlock Text="凭据" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+                <CheckBox x:Name="ChkRememberUsername" Content="记住上次输入的用户名" FontSize="13"
+                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button x:Name="BtnCancel" Content="取消" Style="{StaticResource SettingsSecondaryButton}"
+                            Padding="20,8" Click="BtnCancel_Click"/>
+                    <Button x:Name="BtnSave" Content="保存" Style="{StaticResource SettingsPrimaryButton}"
+                            Padding="20,8" Margin="12,0,0,0" Click="BtnSave_Click"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- ===== 关于 tab（宽松居中排版；窗口高度固定，切换不跳动） ===== -->
+            <StackPanel x:Name="TabAbout" Margin="24,32,24,20" Visibility="Collapsed">
+                <Image Source="/Assets/logo.png" Width="72" Height="72"
+                       RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center"/>
+                <TextBlock Text="YiziShare" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,14,0,0"/>
+                <TextBlock x:Name="VersionText" FontSize="11" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFaintBrush}" Margin="0,4,0,0"/>
+
+                <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="22" TextAlignment="Center"
+                           Margin="20,22,20,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}">
+                    局域网文件共享与即时聊天工具。无需服务器、无需联网，同一局域网内的设备即可互相发现、共享文件夹、传输文件并实时聊天，数据全程在本机与局域网内流转。
+                </TextBlock>
+
+                <Separator Margin="0,24" Background="{DynamicResource CardBorderBrush}"/>
+
+                <!-- GitHub：章鱼猫标志 + 仓库链接，整行可点 -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Cursor="Hand"
+                            MouseLeftButtonDown="GitHubLink_Click" ToolTip="在浏览器中打开 GitHub 仓库">
+                    <Path Width="20" Height="20" Fill="{DynamicResource TextSecondaryBrush}"
+                          Data="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+                          VerticalAlignment="Center"/>
+                    <TextBlock Text="github.com/laoduu/yizishare" FontSize="12.5" VerticalAlignment="Center"
+                               Foreground="{DynamicResource AccentGoldBrush}" Margin="10,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock Text="问题反馈与源码请访问上方仓库" FontSize="11" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFaintBrush}" Margin="0,14,0,0"/>
+            </StackPanel>
         </StackPanel>
-
-        <TextBlock Text="网络" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
-
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-            <TextBlock Text="选择网卡：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-            <ComboBox x:Name="CmbNetworkAdapter" Width="220" FontSize="13" Padding="8,6" Margin="8,0"
-                      Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}"/>
-        </StackPanel>
-
-        <TextBlock Text="凭据" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
-
-        <CheckBox x:Name="ChkRememberUsername" Content="记住上次输入的用户名" FontSize="13"
-                  Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
-
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="BtnCancel" Content="取消" Style="{StaticResource SettingsSecondaryButton}"
-                    Padding="20,8" Click="BtnCancel_Click"/>
-            <Button x:Name="BtnSave" Content="保存" Style="{StaticResource SettingsPrimaryButton}"
-                    Padding="20,8" Margin="12,0,0,0" Click="BtnSave_Click"/>
-        </StackPanel>
-    </StackPanel>
+    </Border>
 </Window>

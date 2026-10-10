@@ -20,3 +20,10 @@ Desktop.ini
 # ===== 测试 / 临时 =====
 TestResults/
 *.nupkg
+
+# ===== 分发与临时产物 =====
+*.zip
+*.log
+screenshot.png
+logonew*.png
+newlogo.png

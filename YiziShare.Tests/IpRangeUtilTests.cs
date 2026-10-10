@@ -62,4 +62,39 @@ public class IpRangeUtilTests
     {
         Assert.Equal("192.168.1.0/24", IpRangeUtil.SubnetOf(IPAddress.Parse("192.168.1.37")));
     }
+
+    [Fact]
+    public void BroadcastAddress_Slash24_ReturnsLastOctetAllOnes()
+    {
+        var b = IpRangeUtil.BroadcastAddress(IPAddress.Parse("192.168.1.0"), 24);
+        Assert.Equal("192.168.1.255", b.ToString());
+    }
+
+    [Fact]
+    public void BroadcastAddress_NonNormalizedInput_NormalizesFirst()
+    {
+        var b = IpRangeUtil.BroadcastAddress(IPAddress.Parse("192.168.9.77"), 24);
+        Assert.Equal("192.168.9.255", b.ToString());
+    }
+
+    [Fact]
+    public void BroadcastAddress_Slash16_FillsLastTwoOctets()
+    {
+        var b = IpRangeUtil.BroadcastAddress(IPAddress.Parse("10.1.0.0"), 16);
+        Assert.Equal("10.1.255.255", b.ToString());
+    }
+
+    [Fact]
+    public void BroadcastAddress_Slash32_IsTheAddressItself()
+    {
+        var b = IpRangeUtil.BroadcastAddress(IPAddress.Parse("10.0.0.7"), 32);
+        Assert.Equal("10.0.0.7", b.ToString());
+    }
+
+    [Fact]
+    public void BroadcastAddress_Slash0_IsAllOnes()
+    {
+        var b = IpRangeUtil.BroadcastAddress(IPAddress.Parse("0.0.0.0"), 0);
+        Assert.Equal("255.255.255.255", b.ToString());
+    }
 }

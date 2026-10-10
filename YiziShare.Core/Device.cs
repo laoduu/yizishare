@@ -42,6 +42,15 @@ public class Device : INotifyPropertyChanged
         set { _nickName = value; OnPropertyChanged(); }
     }
 
+    private string _peerName = "";
+
+    /// <summary>对方自己设置的昵称（聊天广播携带）；显示优先级低于本机备注 NickName、高于 HostName</summary>
+    public string PeerName
+    {
+        get => _peerName;
+        set { _peerName = value; OnPropertyChanged(); }
+    }
+
     public string Manufacturer
     {
         get => _manufacturer;
@@ -78,7 +87,11 @@ public class Device : INotifyPropertyChanged
         set { _lastDiagnosis = value; OnPropertyChanged(); }
     }
 
-    public string DisplayName => string.IsNullOrEmpty(NickName) ? HostName : NickName;
+    /// <summary>显示名：本机备注 > 对方自报昵称 > 主机名</summary>
+    public string DisplayName =>
+        !string.IsNullOrWhiteSpace(NickName) ? NickName :
+        !string.IsNullOrWhiteSpace(PeerName) ? PeerName :
+        HostName;
 
     public string StatusText => LastDiagnosis?.IsAccessible == true
         ? $"📁 {SharedFolders.Count} 个共享"

@@ -40,6 +40,14 @@
     <Color x:Key="AccentGoldSofterColor">#F5E9CF</Color>
     <SolidColorBrush x:Key="AccentGoldSofterBrush" Color="#F5E9CF"/>
 
+    <!-- 聊天气泡 -->
+    <Color x:Key="ChatBubbleOwnBgColor">#F0E2C2</Color>
+    <SolidColorBrush x:Key="ChatBubbleOwnBgBrush" Color="#F0E2C2"/>
+    <Color x:Key="ChatBubblePeerBgColor">#F0F0F0</Color>
+    <SolidColorBrush x:Key="ChatBubblePeerBgBrush" Color="#F0F0F0"/>
+    <Color x:Key="ChatOnlineDotColor">#4CAF50</Color>
+    <SolidColorBrush x:Key="ChatOnlineDotBrush" Color="#4CAF50"/>
+
     <Color x:Key="SemanticGreenColor">#2E7D32</Color>
     <SolidColorBrush x:Key="SemanticGreenBrush" Color="#2E7D32"/>
     <Color x:Key="SemanticGreenBgColor">#E8F5E9</Color>

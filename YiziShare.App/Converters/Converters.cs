@@ -49,8 +49,8 @@ public class SelectionToAvatarConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is true
-            ? new SolidColorBrush((WpfColor)WpfApplication.Current.Resources["NavyPrimaryColor"])
-            : new SolidColorBrush((WpfColor)WpfApplication.Current.Resources["NavyHoverColor"]);
+            ? new SolidColorBrush((WpfColor)WpfApplication.Current.Resources["AccentGoldColor"])
+            : (WpfBrush)WpfApplication.Current.Resources["AccentGoldHoverBrush"];
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();

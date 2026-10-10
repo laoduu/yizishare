@@ -9,6 +9,8 @@ public partial class CredentialDialog : Window
 {
     public string UserName => UserNameBox.Text.Trim();
 
+    public bool RememberCredentials => RememberBox.IsChecked == true;
+
     public string Password
     {
         get

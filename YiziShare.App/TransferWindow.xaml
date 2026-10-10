@@ -1,0 +1,107 @@
+<Window x:Class="YiziShare.App.TransferWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="传输"
+        Width="440"
+        SizeToContent="Height"
+        MinHeight="160"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        FontFamily="Microsoft YaHei UI, Segoe UI, Arial">
+
+    <Window.Resources>
+        <Style x:Key="SlimProgressBar" TargetType="ProgressBar">
+            <Setter Property="Height" Value="5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid>
+                            <Border x:Name="PART_Track" Background="{DynamicResource InputBgBrush}" CornerRadius="2.5"/>
+                            <Border x:Name="PART_Indicator" Background="{DynamicResource AccentGoldBrush}" CornerRadius="2.5" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="TransferJobTemplate">
+            <Border Background="{DynamicResource CardBgBrush}" CornerRadius="8"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    Padding="12,10" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding StatusText}" FontSize="11"
+                               Margin="12,0,0,0" VerticalAlignment="Top"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                    <ProgressBar Grid.Row="1" Grid.Column="0" Style="{StaticResource SlimProgressBar}"
+                                 Margin="0,7,0,0" Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"/>
+
+                    <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding SizeText}" FontSize="10"
+                                   Foreground="{DynamicResource TextFaintBrush}"/>
+                        <TextBlock Text="{Binding DestDir}" FontSize="10" Margin="10,0,0,0"
+                                   Foreground="{DynamicResource TextFaintBrush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+
+                    <Button Grid.Row="1" Grid.Column="1" Content="✕" FontSize="10"
+                            Style="{StaticResource IconButton}" Width="22" Height="22"
+                            Margin="12,4,0,0" VerticalAlignment="Center"
+                            Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Click="CancelJob_Click"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border CornerRadius="12"
+            Background="{DynamicResource PanelBgBrush}"
+            BorderBrush="{DynamicResource WindowEdgeBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Background="{DynamicResource HeaderBgBrush}" CornerRadius="12,12,0,0"
+                    BorderBrush="{DynamicResource HeaderSeparatorBrush}" BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Margin="14,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="传输" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource HeaderTextBrush}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="JobsCountText" Text="" FontSize="11" Margin="8,1,0,0"
+                                   Foreground="{DynamicResource HeaderTextBrush}" Opacity="0.7" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Content="✕" ToolTip="关闭并停止"
+                            Style="{StaticResource IconButton}" FontSize="12" Width="26" Height="26"
+                            HorizontalAlignment="Right" Click="Close_Click"/>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1" MaxHeight="320" VerticalScrollBarVisibility="Auto" Margin="14,12,14,0">
+                <ItemsControl x:Name="JobsList" ItemsSource="{Binding Jobs}"
+                              ItemTemplate="{StaticResource TransferJobTemplate}"/>
+            </ScrollViewer>
+
+            <TextBlock Grid.Row="2" x:Name="FooterText" Text="" FontSize="11" Margin="16,8,16,12"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Grid>
+    </Border>
+</Window>

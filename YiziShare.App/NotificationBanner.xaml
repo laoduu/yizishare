@@ -1,0 +1,83 @@
+<Window x:Class="YiziShare.App.NotificationBanner"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新消息"
+        Width="360" Height="104"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        FontFamily="Microsoft YaHei UI, Segoe UI, Arial"
+        MouseEnter="Banner_MouseEnter"
+        MouseLeave="Banner_MouseLeave">
+
+    <!-- 外圈留白给阴影，贴到哪都不贴边 -->
+    <Grid Margin="14">
+        <Border x:Name="Card" CornerRadius="12"
+                Background="{DynamicResource HeaderBgBrush}"
+                BorderBrush="{DynamicResource WindowEdgeBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                MouseLeftButtonUp="Card_Click">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270"
+                                  Color="#66000000" Opacity="0.45"/>
+            </Border.Effect>
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="Slide"/>
+            </Border.RenderTransform>
+
+            <Grid Margin="14,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 头像：消息取昵称首字符；系统提醒用应用 logo -->
+                <Border Grid.Column="0" Width="38" Height="38" CornerRadius="19"
+                        Background="{DynamicResource AccentGoldBrush}" VerticalAlignment="Center">
+                    <Grid>
+                        <TextBlock x:Name="AvatarChar" Text="?" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image x:Name="AvatarLogo" Source="/Assets/logo.png" Width="26" Height="26"
+                               RenderOptions.BitmapScalingMode="HighQuality" Visibility="Collapsed"/>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,8,0">
+                    <TextBlock x:Name="SenderName" Text="" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource HeaderTextBrush}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="MessagePreview" Text="" FontSize="11" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               MaxHeight="30" LineStackingStrategy="BlockLineHeight" LineHeight="15"
+                               TextTrimming="CharacterEllipsis" TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- 关闭：低调，hover 才明显。
+                     注意不能用 StaticResource 引用 MainWindow 资源（横幅是独立窗口，解析即抛 XamlParseException，
+                     异常会沿 Dispatcher.Invoke 炸回 socket 线程杀掉连接） -->
+                <Button Grid.Column="2" Content="✕" FontSize="10" VerticalAlignment="Top"
+                        Cursor="Hand" Click="Close_Click" ToolTip="关闭"
+                        Foreground="{DynamicResource TextSecondaryBrush}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="bd" Background="Transparent" CornerRadius="4" Padding="5,2">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
