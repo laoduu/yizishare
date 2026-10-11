@@ -112,6 +112,12 @@ public sealed class DeliveryTracker
         lock (_sync) return Transition(msgId, MessageState.Sending);
     }
 
+    /// <summary>标记发送失败（Sending/Sent → Failed；大文件传输中断等场景）</summary>
+    public bool MarkFailed(string msgId)
+    {
+        lock (_sync) return Transition(msgId, MessageState.Failed);
+    }
+
     /// <summary>
     /// 退回排队等待（对方离线）。<br/>
     /// 允许 Sending → Queued：先尝试发送、失败后转入待发队列，
@@ -167,7 +173,8 @@ public sealed class DeliveryTracker
             {
                 if (!string.Equals(pending.PeerId, peerId, StringComparison.Ordinal)) continue;
                 if (pending.Seq > targetSeq) continue;
-                if (pending.State is MessageState.Read) continue;
+                // 已读批量升级不得覆盖失败/取消的终态（如已取消的大文件传输被复活成 ✓✓）
+                if (pending.State is MessageState.Read or MessageState.Failed) continue;
 
                 if (Transition(pending.MsgId, MessageState.Read))
                     changed.Add(pending);

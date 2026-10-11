@@ -12,6 +12,9 @@ public sealed class InboundChatEventArgs : EventArgs
     public ChatEnvelope Envelope { get; init; } = new();
     public string PeerIp { get; init; } = "";
 
+    /// <summary>对端 TCP 端口（FileOffer 携带，供确认接收时回拨数据连接）</summary>
+    public int PeerPort { get; init; }
+
     /// <summary>图片/文件消息落盘后的本地路径（Image/File 专用，其余为空）</summary>
     public string AttachmentPath { get; init; } = "";
 
@@ -25,6 +28,26 @@ public sealed class DeliveryChangedEventArgs : EventArgs
     public string PeerId { get; init; } = "";
     public string MsgId { get; init; } = "";
     public MessageState State { get; init; }
+}
+
+/// <summary>大文件分块传输进度</summary>
+public sealed class FileTransferProgressEventArgs : EventArgs
+{
+    /// <summary>文件消息 MsgId（气泡据此定位）</summary>
+    public string FileId { get; init; } = "";
+    public long BytesDone { get; init; }
+    public long TotalBytes { get; init; }
+    /// <summary>true=接收方向，false=发送方向</summary>
+    public bool IsReceiving { get; init; }
+}
+
+/// <summary>对端中止了大文件传输（拒绝接收 / 中途取消）</summary>
+public sealed class FileAbortEventArgs : EventArgs
+{
+    /// <summary>文件消息 MsgId（气泡据此定位）</summary>
+    public string FileId { get; init; } = "";
+    /// <summary>对端给出的中止原因文案（FileAbort 信令载荷）</summary>
+    public string Reason { get; init; } = "";
 }
 
 /// <summary>
@@ -48,6 +71,11 @@ public sealed class ChatService : IDisposable
 
     private CancellationTokenSource? _cts;
     private TcpListener? _listener;
+    /// <summary>
+    /// UDP 收发合一 socket（绑定 45455）。收发必须同 socket：源端口固定后，
+    /// 对端的回包/心跳才能命中本端出站会话——状态化防火墙（如新 exe 的默认入站拦截）才会放行。
+    /// 独立随机端口发送会导致对端永远收不到我们的包（防火墙会话端点不匹配）。
+    /// </summary>
     private UdpClient? _udpSend;
     private UdpClient? _udpListen;
     private int _localPort;
@@ -67,6 +95,77 @@ public sealed class ChatService : IDisposable
 
     /// <summary>对端在线期间修改了昵称（心跳/消息帧携带新名时触发；上线/掉线仍走 PeerPresenceChanged）</summary>
     public event EventHandler<PeerPresence>? PeerProfileUpdated;
+
+    /// <summary>大文件分块传输进度（收发双向）</summary>
+    public event EventHandler<FileTransferProgressEventArgs>? FileTransferProgress;
+
+    /// <summary>对端中止了大文件传输（拒绝接收 / 中途取消），Reason 为对端给出的文案</summary>
+    public event EventHandler<FileAbortEventArgs>? FileTransferCancelled;
+
+    /// <summary>收到大文件接收提议（FileOffer）：等待用户选择「接收 / 拒绝」，不会自动拉取</summary>
+    public event EventHandler<InboundChatEventArgs>? FileOfferReceived;
+
+    /// <summary>待用户确认的大文件接收请求：FileId → (Offer, 对端 IP/端口)</summary>
+    private readonly ConcurrentDictionary<string, PendingIncomingFile> _pendingIncomingFiles = new(StringComparer.Ordinal);
+
+    private sealed record PendingIncomingFile(ChatEnvelope Offer, string PeerIp, int PeerPort, DateTimeOffset ReceivedAt);
+
+    /// <summary>接收方确认后执行：回拨发送方建立数据连接并流式拉取</summary>
+    public Task AcceptLargeFileAsync(string fileId)
+    {
+        if (!_pendingIncomingFiles.TryRemove(fileId, out var pending))
+            return Task.CompletedTask;
+
+        return ReceiveLargeFileAsync(pending.Offer, pending.PeerIp, pending.PeerPort);
+    }
+
+    /// <summary>拒绝大文件接收：发 FileAbort（携带原因），发送方显示"对方拒绝接收"</summary>
+    public Task RejectLargeFileAsync(string fileId, string reason)
+    {
+        if (!_pendingIncomingFiles.TryRemove(fileId, out var pending))
+            return Task.CompletedTask;
+
+        _delivery.MarkFailed(fileId);
+        RaiseDeliveryChanged(pending.Offer.NodeId, fileId, MessageState.Failed);
+        return SendReceiptAsync(pending.Offer.NodeId, pending.PeerIp, pending.PeerPort, ChatMessageKind.FileAbort, fileId, reason);
+    }
+
+    private sealed record ActiveFileSend(CancellationTokenSource Cts, TcpClient? Client, string NodeId, string PeerIp, int PeerPort);
+    private readonly ConcurrentDictionary<string, ActiveFileSend> _activeFileSends = new(StringComparer.Ordinal);
+
+    private sealed record ActiveFileReceive(CancellationTokenSource Cts, string NodeId, string PeerIp, int PeerPort);
+    private readonly ConcurrentDictionary<string, ActiveFileReceive> _activeFileReceives = new(StringComparer.Ordinal);
+
+    /// <summary>取消进行中的大文件传输（发送方：断开数据连接；接收方：中断拉取并清理半成品）。<br/>
+    /// 同时通过聊天连接发送 FileAbort 信令，让对端也显示"对方已取消传送"。</summary>
+    public void CancelFileTransfer(string fileId)
+    {
+        bool cancelled = false;
+        string peerNodeId = "", peerIp = "";
+        int peerPort = 0;
+
+        if (_activeFileSends.TryRemove(fileId, out var send))
+        {
+            send.Cts.Cancel();
+            try { send.Client?.Dispose(); } catch { } // 关数据连接 → 推送写盘失败 → 双方按失败处理
+            _delivery.MarkFailed(fileId);
+            peerNodeId = send.NodeId; peerIp = send.PeerIp; peerPort = send.PeerPort;
+            cancelled = true;
+            Logger.Info($"大文件传输已取消（发送方）: {Shorten(fileId)}");
+        }
+
+        if (_activeFileReceives.TryRemove(fileId, out var receive))
+        {
+            receive.Cts.Cancel();
+            peerNodeId = receive.NodeId; peerIp = receive.PeerIp; peerPort = receive.PeerPort;
+            cancelled = true;
+            Logger.Info($"大文件传输已取消（接收方）: {Shorten(fileId)}");
+        }
+
+        // 通知对端（走聊天帧；对端清理并显示"对方已取消传送"）
+        if (cancelled)
+            _ = SendReceiptAsync(peerNodeId, peerIp, peerPort, ChatMessageKind.FileAbort, fileId);
+    }
 
     /// <summary>自身消息的投递状态发生变化</summary>
     public event EventHandler<DeliveryChangedEventArgs>? DeliveryChanged;
@@ -131,7 +230,6 @@ public sealed class ChatService : IDisposable
         }
         Log($"聊天服务已启动，监听 TCP 端口 {_localPort}，UDP 广播端口 {ChatConstants.UdpPort}");
 
-        StartUdpSender();
         StartUdpListener(ct);
 
         _ = AcceptLoopAsync(_listener!, ct);
@@ -161,9 +259,11 @@ public sealed class ChatService : IDisposable
 
         try
         {
-            _udpSend?.Dispose();
+            // 收发合一：两个字段是同一实例，只需 Dispose 一次（置 null 防重复释放）
             _udpSend = null;
-            StartUdpSender();
+            _udpListen?.Dispose();
+            _udpListen = null;
+            StartUdpListener(ct);
             await AnnounceBurstAsync(ct);
             Log("网络已变化，聊天服务已重新绑定");
         }
@@ -193,8 +293,10 @@ public sealed class ChatService : IDisposable
             CloseConnection(conn);
         _connections.Clear();
 
-        _udpSend?.Dispose();
+        // 收发合一 socket：Dispose 一次即可（两字段同引用，置 null 防重复释放）
+        _udpSend = null;
         _udpListen?.Dispose();
+        _udpListen = null;
         _cts?.Dispose();
         _handshakeGate.Dispose();
     }
@@ -219,13 +321,22 @@ public sealed class ChatService : IDisposable
         return false;
     }
 
-    private void StartUdpSender()
+    /// <summary>
+    /// 已知对端 IP（定向单播心跳目标）。<br/>
+    /// 广播被对端防火墙拦截时，单播是兜底发现途径：本端出站会话会让状态化防火墙
+    /// 放行对端的回包（收发共用同一 socket，源端口固定 45455）。
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _unicastPeers = new(StringComparer.OrdinalIgnoreCase);
+
+    public void RegisterUnicastPeer(string ip)
     {
-        var client = new UdpClient();
-        client.EnableBroadcast = true;
-        _udpSend = client;
+        if (!string.IsNullOrWhiteSpace(ip))
+            _unicastPeers.TryAdd(ip, 0);
     }
 
+    /// <summary>
+    /// 构建 UDP 收发合一 socket：绑定 UDP 45455，广播与单播心跳都从这里发出（源端口固定 45455）。
+    /// </summary>
     private void StartUdpListener(CancellationToken ct)
     {
         try
@@ -234,6 +345,8 @@ public sealed class ChatService : IDisposable
             client.EnableBroadcast = true;
             client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             client.Client.Bind(new IPEndPoint(IPAddress.Any, ChatConstants.UdpPort));
+            // 收发同 socket：两个字段指向同一实例（历史命名保留，语义 = 发送端点 / 接收端点）
+            _udpSend = client;
             _udpListen = client;
             _ = UdpReceiveLoopAsync(client, ct);
         }
@@ -301,6 +414,19 @@ public sealed class ChatService : IDisposable
             catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
             {
                 return;
+            }
+        }
+
+        // 向已知对端定向单播：广播被新实例的防火墙拦截时，单播出站会话可让对端回包放行
+        foreach (var ip in _unicastPeers.Keys)
+        {
+            try
+            {
+                await client.SendAsync(payload, new IPEndPoint(IPAddress.Parse(ip), ChatConstants.UdpPort), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or FormatException)
+            {
+                _unicastPeers.TryRemove(ip, out _);
             }
         }
     }
@@ -440,7 +566,21 @@ public sealed class ChatService : IDisposable
             handshakeCts.CancelAfter(ChatConstants.HandshakeTimeout);
 
             var hello = await ReadEnvelopeAsync(stream, handshakeCts.Token).ConfigureAwait(false);
-            if (hello == null || hello.Kind != ChatMessageKind.Hello)
+            if (hello == null)
+            {
+                client.Dispose();
+                return;
+            }
+
+            // FileData：大文件数据连接（首帧声明拉取目标，其后为原始二进制流），不走聊天握手
+            if (hello.Kind == ChatMessageKind.FileData)
+            {
+                handshakeCts.CancelAfter(Timeout.InfiniteTimeSpan);
+                await HandleFileDataSendAsync(client, hello, ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (hello.Kind != ChatMessageKind.Hello)
             {
                 client.Dispose();
                 return;
@@ -643,6 +783,18 @@ public sealed class ChatService : IDisposable
                 });
                 break;
 
+            case ChatMessageKind.FileOffer:
+                // 大文件提议：**不自动接收**（防传输轰炸/塞盘攻击）——交由用户确认，超时自动拒绝
+                _pendingIncomingFiles[envelope.FileId] = new PendingIncomingFile(envelope, connection.PeerIp, connection.PeerPort, DateTimeOffset.UtcNow);
+                FileOfferReceived?.Invoke(this, new InboundChatEventArgs
+                {
+                    Envelope = envelope,
+                    PeerIp = connection.PeerIp,
+                    PeerPort = connection.PeerPort,
+                    IsImage = IsImageExtension(envelope.FileName)
+                });
+                break;
+
             case ChatMessageKind.Image:
             case ChatMessageKind.File:
                 var attachmentPath = SaveAttachment(envelope);
@@ -661,6 +813,27 @@ public sealed class ChatService : IDisposable
                     AttachmentPath = attachmentPath,
                     IsImage = envelope.Kind == ChatMessageKind.Image
                 });
+                break;
+
+            case ChatMessageKind.FileAbort:
+                // 对端取消了大文件传输：清理本端状态（接收半成品由超时清扫兜底删除）
+                if (_activeFileSends.TryRemove(envelope.RefId, out var abortedSend))
+                {
+                    abortedSend.Cts.Cancel();
+                    try { abortedSend.Client?.Dispose(); } catch { }
+                }
+                if (_activeFileReceives.TryRemove(envelope.RefId, out var abortedReceive))
+                    abortedReceive.Cts.Cancel();
+
+                _delivery.MarkFailed(envelope.RefId);
+                RaiseDeliveryChanged(envelope.NodeId, envelope.RefId, MessageState.Failed);
+                // 文案来自对端实报（拒绝接收 / 已取消传送），不能在本端硬编码——否则「拒绝」会被误报成「取消」
+                FileTransferCancelled?.Invoke(this, new FileAbortEventArgs
+                {
+                    FileId = envelope.RefId,
+                    Reason = envelope.Text
+                });
+                Logger.Info($"对端中止了大文件传输: {Shorten(envelope.RefId)}（{envelope.Text}）");
                 break;
 
             case ChatMessageKind.Delivered:
@@ -779,6 +952,14 @@ public sealed class ChatService : IDisposable
             var connection = await GetOrConnectAsync(targetNodeId, targetIp, targetPort, CancellationToken.None).ConfigureAwait(false);
             if (connection == null)
             {
+                // 大文件提议（FileOffer）不走离线队列：拉取需要双方同时在线
+                if (envelope.Kind == ChatMessageKind.FileOffer)
+                {
+                    _delivery.MarkFailed(envelope.MsgId);
+                    RaiseDeliveryChanged(targetNodeId, envelope.MsgId, MessageState.Failed);
+                    return;
+                }
+
                 // 对方离线：消息照常保留，由待发队列在对方上线后补发
                 EnqueuePending(targetNodeId, targetIp, targetPort, envelope);
                 _delivery.MarkQueued(envelope.MsgId);
@@ -914,6 +1095,324 @@ public sealed class ChatService : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// 发送大文件（>5MB，无大小上限）：控制/数据通道分离——
+    /// 聊天帧发 FileOffer（元信息），接收方回拨本端 TCP 端口建立**纯二进制流**数据连接拉取。<br/>
+    /// 需对端在线（P2P 无离线暂存）；完成或失败通过投递状态机与 <see cref="FileTransferProgress"/> 反馈。
+    /// </summary>
+    public async Task<string?> SendFileLargeAsync(
+        string targetNodeId, string targetIp, int targetPort, string filePath)
+    {
+        if (!File.Exists(filePath)) return null;
+
+        var fileInfo = new FileInfo(filePath);
+        var fileName = Path.GetFileName(filePath);
+
+        var msgId = Guid.NewGuid().ToString("N");
+        var cts = new CancellationTokenSource();
+        _activeFileSends[msgId] = new ActiveFileSend(cts, null, targetNodeId, targetIp, targetPort); // client 在数据连接进来后挂入
+
+        var connection = await GetOrConnectAsync(targetNodeId, targetIp, targetPort, CancellationToken.None).ConfigureAwait(false);
+        if (connection == null)
+        {
+            _activeFileSends.TryRemove(msgId, out _);
+            cts.Dispose();
+            _delivery.Register(msgId, targetNodeId);
+            RaiseDeliveryChanged(targetNodeId, msgId, MessageState.Failed);
+            return msgId;
+        }
+
+        _delivery.Register(msgId, connection.PeerId);
+        _delivery.MarkSending(msgId);
+
+        // 登记待拉取文件：接收方在 60 秒内回拨 FileData 连接，超时视为失败
+        var offer = new PendingOffer(msgId, connection.PeerId, fileInfo.FullName, fileName, fileInfo.Length, targetIp, targetPort, DateTimeOffset.UtcNow);
+        _pendingOffers[msgId] = offer;
+
+        var envelope = BuildEnvelope(ChatMessageKind.FileOffer, "");
+        envelope.MsgId = msgId;
+        envelope.FileId = msgId;
+        envelope.FileName = fileName;
+        envelope.TotalSize = fileInfo.Length;
+
+        if (!connection.TryEnqueue(envelope))
+        {
+            _pendingOffers.TryRemove(msgId, out _);
+            _delivery.MarkFailed(msgId);
+            RaiseDeliveryChanged(connection.PeerId, msgId, MessageState.Failed);
+            return msgId;
+        }
+
+        // Offer 即初始化进度（0%）：卡片立即显示进度条与取消按钮，而不是等 B 回拨后才有
+        FileTransferProgress?.Invoke(this, new FileTransferProgressEventArgs
+        {
+            FileId = msgId, BytesDone = 0, TotalBytes = fileInfo.Length, IsReceiving = false
+        });
+
+        return msgId;
+    }
+
+    private sealed record PendingOffer(string MsgId, string NodeId, string FilePath, string FileName, long TotalSize, string PeerIp, int PeerPort, DateTimeOffset RegisteredAt);
+
+    private readonly ConcurrentDictionary<string, PendingOffer> _pendingOffers = new(StringComparer.Ordinal);
+
+    /// <summary>FileData 数据连接进来后：按 FileId 找到待发送文件，纯二进制流推送给接收方</summary>
+    private async Task HandleFileDataSendAsync(TcpClient client, ChatEnvelope header, CancellationToken ct)
+    {
+        if (!_pendingOffers.TryRemove(header.FileId, out var offer))
+        {
+            client.Dispose(); // 未知/已超时的拉取请求
+            return;
+        }
+
+        // 数据连接挂入活动传输，供"取消"时断开（取消断连 → 写盘失败 → 双方按失败处理）
+        if (_activeFileSends.TryGetValue(header.FileId, out var active))
+            _activeFileSends[header.FileId] = active with { Client = client };
+
+        try
+        {
+            var stream = client.GetStream();
+            stream.ReadTimeout = 30_000;
+            stream.WriteTimeout = 30_000;
+
+            await using var file = new FileStream(offer.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, ChatConstants.FileDataBufferBytes, useAsync: true);
+            var buffer = new byte[ChatConstants.FileDataBufferBytes];
+            long sent = 0;
+            int read;
+            while ((read = await file.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false)) > 0)
+            {
+                await stream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                sent += read;
+                FileTransferProgress?.Invoke(this, new FileTransferProgressEventArgs
+                {
+                    FileId = offer.MsgId, BytesDone = sent, TotalBytes = offer.TotalSize, IsReceiving = false
+                });
+            }
+
+            await stream.FlushAsync(ct).ConfigureAwait(false);
+            client.Client.Shutdown(SocketShutdown.Send);
+
+            // 等接收方收完关闭（它可能还要做落盘收尾）
+            var drain = new byte[64];
+            try { while (await stream.ReadAsync(drain.AsMemory(0, drain.Length), ct).ConfigureAwait(false) > 0) { } }
+            catch { }
+
+            _delivery.MarkSent(offer.MsgId);
+            RaiseDeliveryChanged(header.NodeId, offer.MsgId, MessageState.Sent);
+            Logger.Info($"大文件已推送: {offer.FileName} ({sent} 字节)");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"大文件推送失败 ({offer.FileName}): {ex.Message}");
+            _delivery.MarkFailed(offer.MsgId);
+            RaiseDeliveryChanged(header.NodeId, offer.MsgId, MessageState.Failed);
+        }
+        finally
+        {
+            client.Dispose();
+            // 传输结束（成功/失败/取消）清理活动登记
+            if (_activeFileSends.TryRemove(header.FileId, out var finished))
+                finished.Cts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 接收大文件（用户确认后调用）：回拨发送方建立 FileData 数据连接，流式拉取落盘。<br/>
+    /// 接收中的消息以 Sending 状态存在，完成时由 UI 层依据 MsgId 更新为可保存的附件。<br/>
+    /// 接收前做磁盘空间预检。
+    /// </summary>
+    private async Task ReceiveLargeFileAsync(ChatEnvelope offer, string peerIp, int peerPort)
+    {
+        var state = new IncomingFileState(offer.FileId, BuildReceivedFilePath(offer.FileId, offer.FileName), offer.FileName, offer.TotalSize);
+        long received = 0;
+        var receiveCts = new CancellationTokenSource();
+        _activeFileReceives[offer.FileId] = new ActiveFileReceive(receiveCts, offer.NodeId, peerIp, peerPort);
+
+        // 磁盘空间预检：目标盘剩余空间不足时直接拒绝（避免写一半撑爆磁盘）
+        try
+        {
+            var targetDrive = Path.GetPathRoot(Path.GetFullPath(state.Path));
+            if (!string.IsNullOrEmpty(targetDrive))
+            {
+                var driveInfo = new DriveInfo(targetDrive);
+                if (driveInfo.AvailableFreeSpace < offer.TotalSize)
+                    throw new IOException($"磁盘剩余空间不足（需要 {offer.TotalSize / 1024 / 1024} MB）");
+            }
+        }
+        catch (IOException) { throw; }
+        catch (Exception ex)
+        {
+            Logger.Warning($"磁盘空间预检失败: {ex.Message}");
+        }
+
+        // 先投递"接收中"气泡（AttachmentPath 为空占位），完成后再发一次填充路径
+        MessageReceived?.Invoke(this, new InboundChatEventArgs
+        {
+            Envelope = offer,
+            PeerIp = peerIp,
+            AttachmentPath = "",
+            IsImage = IsImageExtension(offer.FileName)
+        });
+
+        // 0% 进度初始化：接收卡片立即显示进度条
+        FileTransferProgress?.Invoke(this, new FileTransferProgressEventArgs
+        {
+            FileId = offer.FileId, BytesDone = 0, TotalBytes = offer.TotalSize, IsReceiving = true
+        });
+
+        try
+        {
+            var receivedConnection = await ConnectFileDataAsync(peerIp, peerPort, offer.FileId, receiveCts.Token).ConfigureAwait(false);
+            if (receivedConnection == null) throw new IOException("无法建立数据连接");
+
+            using (receivedConnection)
+            {
+                var remote = receivedConnection.GetStream();
+                remote.ReadTimeout = 30_000;
+
+                await using var file = new FileStream(state.Path, FileMode.Create, FileAccess.Write, FileShare.None, ChatConstants.FileDataBufferBytes, useAsync: true);
+                var buffer = new byte[ChatConstants.FileDataBufferBytes];
+                int read;
+                while (received < offer.TotalSize &&
+                       (read = await remote.ReadAsync(buffer.AsMemory(0, buffer.Length), receiveCts.Token).ConfigureAwait(false)) > 0)
+                {
+                    await file.WriteAsync(buffer.AsMemory(0, read), receiveCts.Token).ConfigureAwait(false);
+                    received += read;
+                    FileTransferProgress?.Invoke(this, new FileTransferProgressEventArgs
+                    {
+                        FileId = offer.FileId, BytesDone = received, TotalBytes = offer.TotalSize, IsReceiving = true
+                    });
+                }
+
+                if (received < offer.TotalSize) throw new IOException("发送方提前断开");
+
+                await file.FlushAsync(receiveCts.Token).ConfigureAwait(false);
+            }
+
+            // 完成：在聊天连接上补 Delivered 回执，并投递 UI
+            var chatConnection = await GetOrConnectAsync(offer.NodeId, peerIp, peerPort, CancellationToken.None).ConfigureAwait(false);
+            chatConnection?.TryEnqueue(BuildReceipt(ChatMessageKind.Delivered, offer.MsgId));
+
+            _delivery.ApplyDelivered(offer.MsgId);
+            RaiseDeliveryChanged(offer.NodeId, offer.MsgId, MessageState.Delivered);
+
+            MessageReceived?.Invoke(this, new InboundChatEventArgs
+            {
+                Envelope = offer,
+                PeerIp = peerIp,
+                AttachmentPath = state.Path,
+                IsImage = IsImageExtension(offer.FileName)
+            });
+            Logger.Info($"大文件接收完成: {offer.FileName} ({received} 字节)");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning($"大文件接收失败 ({offer.FileName}): {ex.Message}");
+            try { if (File.Exists(state.Path)) File.Delete(state.Path); } catch { }
+            RaiseDeliveryChanged(offer.NodeId, offer.MsgId, MessageState.Failed);
+        }
+        finally
+        {
+            _activeFileReceives.TryRemove(offer.FileId, out var doneCts);
+            doneCts?.Cts.Dispose();
+        }
+    }
+
+    /// <summary>拨号对端 TCP 端口并以 FileData 头声明数据连接用途</summary>
+    private async Task<TcpClient?> ConnectFileDataAsync(string peerIp, int peerPort, string fileId, CancellationToken ct)
+    {
+        if (!IPAddress.TryParse(peerIp, out var address)) return null;
+
+        var ports = new List<int> { peerPort };
+        if (peerPort == ChatConstants.TcpPort)
+            for (int p = ChatConstants.TcpPort + 1; p <= ChatConstants.TcpPortScanEnd; p++) ports.Add(p);
+
+        TcpClient? client = null;
+        foreach (var port in ports)
+        {
+            try
+            {
+                client = new TcpClient();
+                client.NoDelay = true;
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(ChatConstants.HandshakeTimeout);
+                await client.ConnectAsync(address, port, cts.Token).ConfigureAwait(false);
+
+                await TrySendAsync(client, new ChatEnvelope
+                {
+                    Kind = ChatMessageKind.FileData,
+                    MsgId = Guid.NewGuid().ToString("N"),
+                    NodeId = _nodeId,
+                    FileId = fileId
+                }).ConfigureAwait(false);
+
+                return client;
+            }
+            catch (Exception ex) when (ex is SocketException or OperationCanceledException or ObjectDisposedException)
+            {
+                client?.Dispose();
+                client = null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>按扩展名判定是否图片</summary>
+    private static bool IsImageExtension(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp";
+    }
+
+    /// <summary>接收中的大文件状态（Offer 到达即确定路径，完成即有效附件）</summary>
+    private sealed record IncomingFileState(string FileId, string Path, string FileName, long TotalSize);
+
+    /// <summary>构建接收文件的落盘路径：{接收目录}/{月份}/{MsgId前8}_{文件名}（去重且防同名覆盖）</summary>
+    private static string BuildReceivedFilePath(string fileId, string fileName)
+    {
+        var safeName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
+        if (string.IsNullOrWhiteSpace(safeName)) safeName = "file";
+
+        var dir = Path.Combine(SettingsStore.GetReceivedDirectory(), DateTime.Now.ToString("yyyyMM"));
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, $"{fileId[..8]}_{safeName}");
+    }
+
+    /// <summary>大文件提议超时（5 分钟无人确认）的中止原因文案——收发双方共用，措辞对两种身份都成立</summary>
+    private const string TimeoutAbortReason = "超过5分钟未接收，已取消传送";
+
+    /// <summary>超时未拉取的大文件提议：标记失败、通知对端并清理登记（5 分钟，给用户足够的确认时间）</summary>
+    private void SweepPendingOffers()
+    {
+        foreach (var (fileId, offer) in _pendingOffers)
+        {
+            if (DateTimeOffset.UtcNow - offer.RegisteredAt <= TimeSpan.FromSeconds(300)) continue;
+
+            if (_pendingOffers.TryRemove(fileId, out var removed))
+            {
+                _delivery.MarkFailed(fileId);
+                RaiseDeliveryChanged(removed.NodeId, fileId, MessageState.Failed);
+                Logger.Warning($"大文件提议超时未被拉取: {offer.FileName}");
+
+                // 同步清理活动登记（cts 与数据连接），并通知对端"接收请求已超时"
+                if (_activeFileSends.TryRemove(fileId, out var stale))
+                {
+                    stale.Cts.Cancel();
+                    try { stale.Client?.Dispose(); } catch { }
+                    stale.Cts.Dispose();
+                }
+                // 双方共用同一句「结果通知」：发送方看到的是自己提议的结果，接收方看到的是自己未处理的提议，
+                // 措辞必须对两种身份都成立（"请重新发送"只对发送方成立，故不用）
+                _ = SendReceiptAsync(removed.NodeId, offer.PeerIp, offer.PeerPort, ChatMessageKind.FileAbort, fileId, TimeoutAbortReason);
+                FileTransferCancelled?.Invoke(this, new FileAbortEventArgs
+                {
+                    FileId = fileId,
+                    Reason = TimeoutAbortReason
+                });
+            }
+        }
+    }
+
     /// <summary>发送回执（Delivered 或 Read）。回执发送失败不影响主流程，仅记录日志。</summary>
     public async Task SendReceiptAsync(string targetNodeId, string targetIp, int targetPort,
         ChatMessageKind kind, string refId, string text = "")
@@ -966,9 +1465,7 @@ public sealed class ChatService : IDisposable
             var safeName = string.Join("_", envelope.FileName.Split(Path.GetInvalidFileNameChars()));
             if (string.IsNullOrWhiteSpace(safeName)) safeName = "attachment";
 
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "YiziShare", "Received", DateTime.Now.ToString("yyyyMM"));
+            var dir = Path.Combine(SettingsStore.GetReceivedDirectory(), DateTime.Now.ToString("yyyyMM"));
             Directory.CreateDirectory(dir);
 
             var path = Path.Combine(dir, $"{envelope.MsgId[..8]}_{safeName}");
@@ -1167,6 +1664,7 @@ public sealed class ChatService : IDisposable
 
     private void RunMaintenance(CancellationToken ct)
     {
+        SweepPendingOffers();
         var now = DateTimeOffset.UtcNow;
 
         foreach (var pending in _delivery.SweepTimeouts(now))

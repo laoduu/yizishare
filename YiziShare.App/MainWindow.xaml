@@ -312,8 +312,24 @@
                                 <MenuItem x:Name="MenuCopyImage" Header="复制图片" Click="BubbleCopyImage_Click">
                                     <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE91B;"/></MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem x:Name="MenuOpenFile" Header="打开文件" InputGestureText="双击" Click="BubbleOpenFile_Click">
+                                    <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE8E5;"/></MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem x:Name="MenuSaveAs" Header="另存为..." Click="BubbleSaveAs_Click">
                                     <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE792;"/></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuOpenFolder" Header="打开所在文件夹" Click="BubbleOpenFolder_Click">
+                                    <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE838;"/></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator x:Name="MenuTransferSeparator"/>
+                                <MenuItem x:Name="MenuAcceptFile" Header="接收文件" Click="BubbleAcceptFile_Click">
+                                    <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE8B0;"/></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuRejectFile" Header="拒绝接收" Click="BubbleRejectFile_Click">
+                                    <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE711;"/></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem x:Name="MenuCancelTransfer" Header="取消传输" Click="BubbleCancelTransfer_Click">
+                                    <MenuItem.Icon><TextBlock Style="{StaticResource Mdl2Glyph}" Text="&#xE74D;"/></MenuItem.Icon>
                                 </MenuItem>
                             </ContextMenu>
                         </Border.ContextMenu>
@@ -383,13 +399,64 @@
                                         </ContentControl.Style>
                                     </ContentControl>
                                 </Grid>
-                                <StackPanel VerticalAlignment="Center">
+                                <StackPanel VerticalAlignment="Center" MouseLeftButtonDown="BubbleFile_DoubleClick">
                                     <TextBlock Text="{Binding Text}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimaryBrush}"
                                                MaxWidth="200" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding AttachmentPath}"/>
-                                    <TextBlock Text="文件 · 右键可另存" FontSize="10"
+                                    <TextBlock Text="{Binding FileCardHint}" FontSize="10"
                                                Foreground="{DynamicResource TextFaintBrush}" Margin="0,3,0,0"/>
+                                    <!-- 大文件传输进度：进度条 + 右侧取消按钮（收发双向，传输中直接可见） -->
+                                    <!-- 注意：Visibility 只能由 Style 驱动，本地值会压死触发器（本项目第五次踩坑） -->
+                                    <Grid MinWidth="190" Margin="0,5,0,0">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowTransferProgress}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ProgressBar Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}"
+                                                     Height="4" VerticalAlignment="Center" BorderThickness="0"
+                                                     Foreground="{DynamicResource AccentGoldBrush}"
+                                                     Background="{DynamicResource CardBorderBrush}"/>
+                                        <Button Grid.Column="1" Width="20" Height="20" Margin="6,0,0,0"
+                                                Style="{StaticResource EditIconButton}" FontFamily="Segoe MDL2 Assets"
+                                                FontSize="10" Content="&#xE711;" VerticalAlignment="Center"
+                                                ToolTip="取消传输" Click="BubbleCancelTransfer_Click"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                    <!-- 大文件待接收：用户确认（防传输轰炸/塞盘攻击），超时自动拒绝 -->
+                                    <!-- 注意：Visibility 只能由 Style 驱动，本地值会压死触发器 -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsFile}" Value="True"/>
+                                                            <Condition Binding="{Binding AwaitingAcceptance}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <Button Content="接收" Style="{StaticResource SettingsSecondaryButton}"
+                                                Padding="14,5" Margin="0,0,8,0" Click="BubbleAcceptFile_Click"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="拒绝" Style="{StaticResource SettingsSecondaryButton}"
+                                                Padding="14,5" Click="BubbleRejectFile_Click"
+                                                CommandParameter="{Binding}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </Grid>
@@ -400,7 +467,7 @@
                             HorizontalAlignment="Left" Cursor="Hand" BorderThickness="0" Padding="0"
                             Background="Transparent"
                             Click="ChatRetry_Click" CommandParameter="{Binding}"
-                            Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibilityConverter}}">
+                            Visibility="{Binding ShowStateText, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource EditIconButton}">
                                 <Setter Property="Opacity" Value="1"/>
@@ -691,7 +758,9 @@
 
                     <!-- ========== 聊天页 ==========
                          聊天对象由设备列表的选中项决定：选中谁就跟谁聊天，不引入多目标会话侧栏 -->
-                    <Grid Grid.Row="2" x:Name="ChatPane" Background="{DynamicResource PanelBgBrush}">
+                    <Grid Grid.Row="2" x:Name="ChatPane" Background="{DynamicResource PanelBgBrush}"
+                          AllowDrop="True" PreviewDragOver="ChatPane_PreviewDragOver"
+                          PreviewDrop="ChatPane_PreviewDrop" DragLeave="ChatPane_DragLeave">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
@@ -773,7 +842,7 @@
                                         </Thumb.Template>
                                     </Thumb>
                                     <!-- 微信式输入框：编辑区在框内，表情/文件靠左、发送靠右（底栏），默认约 5 行高 -->
-                                    <Border CornerRadius="10" Background="{DynamicResource InputBgBrush}"
+                                    <Border x:Name="InputBorder" CornerRadius="10" Background="{DynamicResource InputBgBrush}"
                                             BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
                                         <Grid Margin="6,2,6,6">
                                             <Grid.RowDefinitions>

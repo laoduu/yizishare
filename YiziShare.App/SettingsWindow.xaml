@@ -10,54 +10,6 @@
         ShowInTaskbar="False"
         MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
     <Window.Resources>
-        <Style x:Key="SettingsPrimaryButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="{StaticResource AccentGoldBrush}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentGoldHoverBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentGoldPressedBrush}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="SettingsSecondaryButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-            <Setter Property="Background" Value="{DynamicResource SecondaryBtnBgBrush}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnHoverBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryBtnPressedBrush}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
         <!-- 设置页 tab 按钮：透明底，选中金色文字 -->
         <Style x:Key="SettingsTabButton" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
@@ -166,7 +118,24 @@
                 <TextBlock Text="聊天" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
 
                 <CheckBox x:Name="ChkChatSound" Content="收到消息时播放提示音" FontSize="13"
-                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,20"/>
+                          Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,10"/>
+
+                <!-- 文件接收目录：聊天收到的文件（图片/文件）自动保存位置；留空使用默认 -->
+                <StackPanel Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="文件接收目录：" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnBrowseReceiveDir" Content="浏览..." Style="{StaticResource SettingsSecondaryButton}"
+                                Padding="10,4" Margin="8,0,0,0" Click="BtnBrowseReceiveDir_Click" ToolTip="选择接收文件的保存位置"/>
+                        <Button Content="恢复默认" Style="{StaticResource SettingsSecondaryButton}"
+                                Padding="10,4" Margin="6,0,0,0" Click="BtnResetReceiveDir_Click" ToolTip="恢复为默认位置（C 盘应用数据目录）"/>
+                    </StackPanel>
+                    <TextBox x:Name="TxtReceiveDir" FontSize="11.5" Padding="8,5" Margin="0,8,0,0"
+                             Background="{DynamicResource InputBgBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderThickness="0"
+                             TextWrapping="Wrap" MaxHeight="46" VerticalScrollBarVisibility="Auto"
+                             VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="ReceiveDirHint" Text="留空使用默认位置" FontSize="10"
+                               Foreground="{DynamicResource TextFaintBrush}" Margin="0,4,0,0"/>
+                </StackPanel>
 
                 <TextBlock Text="凭据" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
 

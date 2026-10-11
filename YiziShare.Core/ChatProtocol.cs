@@ -27,8 +27,14 @@ public enum ChatMessageKind : byte
     Pong = 8,
     /// <summary>图片消息：Data 为 base64 编码的图片字节，FileName 为原始文件名</summary>
     Image = 9,
-    /// <summary>文件消息：Data 为 base64 编码的文件字节，FileName 为原始文件名</summary>
-    File = 10
+    /// <summary>文件消息（≤5MB 小文件）：Data 为 base64 编码的文件字节，FileName 为原始文件名</summary>
+    File = 10,
+    /// <summary>大文件提议（聊天帧，≤数百字节）：FileName/TotalSize 描述文件，接收方收到后回拨 FileData 数据连接拉取</summary>
+    FileOffer = 11,
+    /// <summary>大文件数据通道首帧（B→A 拨号后的第一个 JSON 帧，声明拉取哪个 FileId），其后为原始二进制流</summary>
+    FileData = 12,
+    /// <summary>取消大文件传输：RefId=FileId；收到后清理半成品并显示"对方已取消传送"</summary>
+    FileAbort = 13
 }
 
 /// <summary>局域网聊天协议常量（端口与各类超时）</summary>
@@ -70,8 +76,11 @@ public static class ChatConstants
     /// <summary>主动 TCP 拨号探测的超时（绕开 UDP 的降级路径）</summary>
     public static readonly TimeSpan ProbeTimeout = TimeSpan.FromMilliseconds(1500);
 
-    /// <summary>聊天附件（图片/文件）单文件大小上限（原始字节）</summary>
+    /// <summary>聊天附件（图片/文件）单文件大小上限（原始字节）——≤此值走单帧内联（离线队列可用）</summary>
     public const long MaxAttachmentBytes = 5 * 1024 * 1024;
+
+    /// <summary>大文件流式传输：无大小上限（纯二进制流，1MB 缓冲逐段读写）</summary>
+    public const int FileDataBufferBytes = 1024 * 1024;
 }
 
 /// <summary>聊天消息信封（JSON 序列化后按长度前缀分帧传输）</summary>
@@ -100,8 +109,14 @@ public sealed class ChatEnvelope
     /// <summary>图片/文件消息的 base64 载荷（Image/File 专用，其余为空）</summary>
     public string Data { get; set; } = "";
 
-    /// <summary>图片/文件消息的原始文件名（含扩展名，用于落盘与展示）</summary>
+    /// <summary>图片/文件消息的原始文件名（含扩展名，用于落盘与展示）；FileData 首帧可省略</summary>
     public string FileName { get; set; } = "";
+
+    /// <summary>大文件传输会话 ID（等于该文件消息的 MsgId；FileOffer 与 FileData 首帧用它配对）</summary>
+    public string FileId { get; set; } = "";
+
+    /// <summary>文件总字节数（FileOffer 携带，供接收方空间检查与进度）</summary>
+    public long TotalSize { get; set; }
 
     /// <summary>Unix 毫秒时间戳</summary>
     public long Timestamp { get; set; }

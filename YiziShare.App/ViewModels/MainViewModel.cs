@@ -179,10 +179,15 @@ public class MainViewModel : ViewModelBase
 
         var device = _masterDevices.FirstOrDefault(d =>
             string.Equals(d.IpAddress, peerIp, StringComparison.OrdinalIgnoreCase));
-        if (device == null) return;
+        if (device == null)
+        {
+            Logger.Info($"昵称同步跳过：设备列表中无 {peerIp}（对端 {peerName}）");
+            return;
+        }
 
         if (!string.Equals(device.Model.PeerName, peerName, StringComparison.Ordinal))
         {
+            Logger.Info($"昵称同步: {device.IpAddress} → {peerName}");
             device.Model.PeerName = peerName;
             device.RefreshDeviceInfo();
         }
@@ -354,6 +359,9 @@ public class MainViewModel : ViewModelBase
                 var saved = NicknameStore.GetNickname(device.IpAddress);
                 if (!string.IsNullOrEmpty(saved))
                     device.NickName = saved;
+
+                // 扫描发现的设备喂给聊天服务作为定向单播心跳目标（广播被防火墙拦截时的兜底发现）
+                Chat.RegisterUnicastPeer(device.IpAddress);
             }
 
             UpdateDeviceCache(devices);

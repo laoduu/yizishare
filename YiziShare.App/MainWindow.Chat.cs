@@ -370,7 +370,7 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>气泡右键菜单打开前：按消息种类启用"复制文本/复制图片/另存为"</summary>
+    /// <summary>气泡右键菜单打开前：按消息种类启用"复制文本/复制图片/打开文件/另存为/打开所在文件夹/取消传输"</summary>
     private void Bubble_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ChatMessageViewModel msg, ContextMenu: ContextMenu menu })
@@ -380,13 +380,153 @@ public partial class MainWindow
         {
             item.Visibility = item.Header switch
             {
-                "复制文本" => msg is { IsImage: false, IsFile: false } ? Visibility.Visible : Visibility.Collapsed,
+                "复制文本" => msg.IsText ? Visibility.Visible : Visibility.Collapsed,
                 "复制图片" => msg.IsImage ? Visibility.Visible : Visibility.Collapsed,
+                "打开文件" => msg.HasAttachment ? Visibility.Visible : Visibility.Collapsed,
                 "另存为..." => msg.HasAttachment ? Visibility.Visible : Visibility.Collapsed,
+                "打开所在文件夹" => msg.HasAttachment ? Visibility.Visible : Visibility.Collapsed,
+                // 传输类动作：待接收→接收/拒绝；传送中→取消；完成后→无
+                "接收文件" => msg.AwaitingAcceptance ? Visibility.Visible : Visibility.Collapsed,
+                "拒绝接收" => msg.AwaitingAcceptance ? Visibility.Visible : Visibility.Collapsed,
+                "取消传输" => msg.IsTransferring ? Visibility.Visible : Visibility.Collapsed,
                 _ => item.Visibility
             };
         }
+
+        // 分隔线：其后的传输类动作全部隐藏时一并收起，否则会留下一条"空气泡"分隔线
+        var hasTransferAction = menu.Items.OfType<System.Windows.Controls.MenuItem>()
+            .Any(i => i.Visibility == Visibility.Visible &&
+                      i.Header is "接收文件" or "拒绝接收" or "取消传输");
+        foreach (var separator in menu.Items.OfType<System.Windows.Controls.Separator>())
+            separator.Visibility = hasTransferAction ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>打开文件（按本机关联程序，收发双方均可；接收中未完成时不可打开）</summary>
+    private void BubbleOpenFile_Click(object sender, RoutedEventArgs e)
+    {
+        var msg = (sender as FrameworkElement)?.DataContext as ChatMessageViewModel;
+        if (msg is not { HasAttachment: true } m) return;
+        if (!File.Exists(m.AttachmentPath))
+        {
+            _viewModel.StatusMessage = "文件还在传输中，完成后才能打开";
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = m.AttachmentPath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"打开失败: {ex.Message}", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>打开附件所在文件夹并选中文件</summary>
+    private void BubbleOpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var msg = (sender as FrameworkElement)?.DataContext as ChatMessageViewModel;
+        if (msg is not { HasAttachment: true } m) return;
+        if (!File.Exists(m.AttachmentPath))
+        {
+            _viewModel.StatusMessage = "文件还在传输中，完成后才能打开";
+            return;
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{m.AttachmentPath}\"",
+            UseShellExecute = true
+        });
+    }
+
+    /// <summary>用户确认接收：回拨发送方拉取（进度条在原气泡上继续显示）</summary>
+    private void BubbleAcceptFile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ChatMessageViewModel msg) return;
+        _viewModel.Chat.AcceptFile(msg.MsgId);
+    }
+
+    /// <summary>用户拒绝接收：通知发送方，气泡转为「已拒绝接收」</summary>
+    private void BubbleRejectFile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ChatMessageViewModel msg) return;
+        _viewModel.Chat.RejectFile(msg.MsgId, "对方拒绝接收");
+    }
+
+    /// <summary>取消进行中的大文件传输（发送方断开数据连接 / 接收方中断拉取并清理半成品）</summary>
+    private void BubbleCancelTransfer_Click(object sender, RoutedEventArgs e)
+    {
+        var msg = (sender as FrameworkElement)?.DataContext as ChatMessageViewModel;
+        if (msg is not { IsTransferring: true } m) return;
+
+        // 状态栏文案由 ChatViewModel 统一发出（已取消传送 / 对方拒绝接收等），此处不重复设置
+        _viewModel.Chat.CancelFileTransfer(m.MsgId);
+    }
+
+    /// <summary>附件消息进入终态（完成/失败/取消）：若是当前会话则自动下滚，让用户看到最新状态</summary>
+    private void OnAttachmentStateChanged(object? sender, string msgId)
+    {
+        if (_viewModel.Chat.IsMessageInSelectedConversation(msgId))
+            Dispatcher.BeginInvoke(ScrollChatToBottom, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>双击文件卡片：按本机关联程序打开（发送方=原文件；接收方=落盘文件；接收中无效）</summary>
+    private void BubbleFile_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount < 2) return; // 仅响应双击，避免单击误开
+        if (sender is FrameworkElement { DataContext: ChatMessageViewModel msg } && msg.HasAttachment)
+            OpenAttachment(msg);
+    }
+
+    private static void OpenAttachment(ChatMessageViewModel msg)
+    {
+        if (!File.Exists(msg.AttachmentPath)) return;
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = msg.AttachmentPath,
+            UseShellExecute = true
+        });
+    }
+
+    #region 聊天面板拖放发送（文件拖入对话框/记录窗口即发送）
+
+    private void ChatPane_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        // 仅接受文件；拖入时输入框边框高亮提示落点
+        e.Handled = true;
+        var hasFiles = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop);
+        e.Effects = hasFiles ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        InputBorder.BorderBrush = hasFiles
+            ? (System.Windows.Media.Brush)System.Windows.Application.Current.Resources["AccentGoldBrush"]
+            : (System.Windows.Media.Brush)System.Windows.Application.Current.Resources["CardBorderBrush"];
+    }
+
+    private void ChatPane_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        InputBorder.BorderBrush = (System.Windows.Media.Brush)System.Windows.Application.Current.Resources["CardBorderBrush"];
+    }
+
+    private async void ChatPane_PreviewDrop(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Handled = true;
+        InputBorder.BorderBrush = (System.Windows.Media.Brush)System.Windows.Application.Current.Resources["CardBorderBrush"];
+
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is not string[] files) return;
+
+        foreach (var file in files)
+            await _viewModel.Chat.SendAttachmentAsync(file);
+        ScrollChatToBottom();
+    }
+
+    #endregion
 
     private void BubbleCopyText_Click(object sender, RoutedEventArgs e)
     {
@@ -503,7 +643,7 @@ public partial class MainWindow
         }), System.Windows.Threading.DispatcherPriority.Background);
     }
 
-    /// <summary>后台收到新消息：播放提示音、右下角横幅提醒（微信样式）、更新托盘未读态</summary>
+    /// <summary>后台收到新消息：播放提示音、横幅通知、更新托盘未读态；若为当前会话则自动下滚（状态变化可见）</summary>
     private void OnMessageReceivedInBackground(object? sender, ConversationViewModel conversation)
     {
         UpdateTrayUnreadState();
@@ -519,6 +659,10 @@ public partial class MainWindow
             conversation.PeerName,
             conversation.LastPreview,
             () => OpenChatFromBanner(conversation.PeerIp));
+
+        // 是当前查看的会话 → 自动下滚（大文件状态变化不让用户毫不知情）
+        if (_viewModel.Chat.IsMessageInSelectedConversation(conversation == null ? "" : conversation.Messages.LastOrDefault()?.MsgId ?? ""))
+            Dispatcher.BeginInvoke(ScrollChatToBottom, System.Windows.Threading.DispatcherPriority.Background);
 
         _viewModel.StatusMessage = $"🔔 {conversation.PeerName}: {conversation.LastPreview}";
     }

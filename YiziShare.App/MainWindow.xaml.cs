@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         _viewModel.Chat.StatusRequested += (_, message) => _viewModel.StatusMessage = message;
         _viewModel.Chat.MessageReceivedInBackground += OnMessageReceivedInBackground;
         _viewModel.Chat.MessageReceivedWhileViewing += OnMessageReceivedWhileViewing;
+        _viewModel.Chat.AttachmentStateChanged += OnAttachmentStateChanged;
 
         // 打开共享 → 面板内置浏览（MainViewModel 只发请求，窗口负责 UI 切换）
         _viewModel.ShareOpenRequested += (_, path) => ShowShareBrowser(path);

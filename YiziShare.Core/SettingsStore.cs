@@ -202,6 +202,41 @@ public static class SettingsStore
         catch { }
     }
 
+    /// <summary>聊天文件接收目录；空 = 默认 %LOCALAPPDATA%\YiziShare\Received</summary>
+    public static string DefaultReceivedDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "YiziShare", "Received");
+
+    public static string GetReceivedDirectory()
+    {
+        var custom = "";
+        try
+        {
+            if (File.Exists(SettingsPath))
+            {
+                var json = File.ReadAllText(SettingsPath);
+                var settings = JsonSerializer.Deserialize<SettingsData>(json);
+                custom = settings?.ReceivedDirectory?.Trim() ?? "";
+            }
+        }
+        catch { }
+
+        if (!string.IsNullOrWhiteSpace(custom))
+        {
+            try { Directory.CreateDirectory(custom); return custom; } catch { /* 目录建不了（盘不在了）回默认 */ }
+        }
+
+        try { Directory.CreateDirectory(DefaultReceivedDirectory); } catch { }
+        return DefaultReceivedDirectory;
+    }
+
+    public static void SetReceivedDirectory(string directory)
+    {
+        var settings = LoadSettings();
+        settings.ReceivedDirectory = directory?.Trim() ?? "";
+        SaveSettings(settings);
+    }
+
     private static SettingsData LoadSettings()
     {
         try
@@ -235,5 +270,6 @@ public static class SettingsStore
         public bool ChatSoundEnabled { get; set; } = true;
         public bool FileBrowseIconMode { get; set; }
         public string MyNickname { get; set; } = "";
+        public string? ReceivedDirectory { get; set; }
     }
 }

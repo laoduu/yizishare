@@ -15,17 +15,21 @@ public class ChatMessageViewModel : ViewModelBase
     private bool _showDivider;
 
     public ChatMessageViewModel(string msgId, bool isMine, string text, DateTime timestamp, MessageState state,
-        bool isImage = false, string attachmentPath = "")
+        bool isAttachment = false, bool isImage = false, string attachmentPath = "")
     {
         MsgId = msgId;
         IsMine = isMine;
         Text = text;
         Timestamp = timestamp;
         _state = state;
+        IsAttachment = isAttachment;
         IsImage = isImage;
         AttachmentPath = attachmentPath;
-        ShellIcon = HasAttachment && !isImage
-            ? Services.FileTypeIconCache.GetIconImage(attachmentPath)
+        // Shell 图标按扩展名提取（SHGFI_USEFILEATTRIBUTES 只读名字不碰磁盘）：
+        // 文件消息用展示文本（=文件名，接收中取自 FileOffer），完成后 CompleteAttachment 按真实路径刷新；
+        // 图片消息无需类型图标（气泡直接显示图片）
+        ShellIcon = IsAttachment && !IsImage && !string.IsNullOrWhiteSpace(text)
+            ? Services.FileTypeIconCache.GetIconImage(text)
             : null;
         RichText = BuildRichText(text);
     }
@@ -97,24 +101,142 @@ public class ChatMessageViewModel : ViewModelBase
     public string Text { get; }
     public DateTime Timestamp { get; set; }
 
-    /// <summary>是否图片消息（气泡内直接显示图片）</summary>
-    public bool IsImage { get; }
+    /// <summary>是否附件类消息（图片或文件；接收中大文件路径尚为空但已算附件）</summary>
+    public bool IsAttachment { get; }
 
-    /// <summary>附件本地路径（图片消息 = 可显示的图片；文件消息 = 原文件/落盘文件）</summary>
-    public string AttachmentPath { get; } = "";
+    /// <summary>是否图片消息（气泡内直接显示图片；大文件接收完成时按扩展名确定）</summary>
+    public bool IsImage { get; private set; }
+
+    /// <summary>附件本地路径（图片消息 = 可显示的图片；文件消息 = 原文件/落盘文件）；接收中为空，完成时填充</summary>
+    public string AttachmentPath { get; private set; } = "";
+
+    /// <summary>失败原因（取消/中断时的状态栏文案）；普通失败为空显示 ❌</summary>
+    private string _failureReason = "";
+
+    public string FailureReason
+    {
+        get => _failureReason;
+        set
+        {
+            if (!SetProperty(ref _failureReason, value)) return;
+            OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(ShowStateText));
+        }
+    }
 
     /// <summary>是否附件消息（图片或文件）</summary>
     public bool HasAttachment => !string.IsNullOrEmpty(AttachmentPath);
 
     /// <summary>是否文件消息（非图片的附件）</summary>
-    public bool IsFile => HasAttachment && !IsImage;
+    public bool IsFile => IsAttachment && !IsImage;
+
+    /// <summary>
+    /// 文件卡片副标题：随传输阶段变化，指导用户当下能做什么。<br/>
+    /// 待接收/传送中的卡片不能双击打开，写死"双击打开 · 右键更多"会误导。
+    /// </summary>
+    public string FileCardHint => !IsFile
+        ? ""
+        : AwaitingAcceptance ? "文件 · 请在卡片上选择接收或拒绝"
+        : State == MessageState.Failed ? "文件 · 右键可另存为"
+        : IsMine && IsLargeFileAwaitingAcceptance ? "文件 · 已发出，等待对方接收 · 右键可取消"
+        : IsTransferring ? "文件 · 传输中 · 右键可取消"
+        : HasAttachment ? "文件 · 双击打开 · 右键更多"
+        : "文件 · 等待对方处理";
 
     /// <summary>是否纯文本消息（文本 + 内联彩色表情）</summary>
-    public bool IsText => !HasAttachment;
+    public bool IsText => !IsAttachment;
+
+    /// <summary>是否等待用户确认接收（大文件 FileOffer 到达后、用户选择前）</summary>
+    private bool _awaitingAcceptance;
+    public bool AwaitingAcceptance
+    {
+        get => _awaitingAcceptance;
+        set
+        {
+            if (!SetProperty(ref _awaitingAcceptance, value)) return;
+            OnPropertyChanged(nameof(IsTransferring));
+            OnPropertyChanged(nameof(ShowTransferProgress));
+            OnPropertyChanged(nameof(FileCardHint));
+        }
+    }
+
+    /// <summary>是否显示传输进度条（附件传输中且已开始拉取）</summary>
+    public bool ShowTransferProgress => IsFile && IsTransferring;
+
+    /// <summary>
+    /// 是否走流式大文件通道（>5MB，控制/数据通道分离）。<br/>
+    /// 用于区分「内联附件的瞬时 ⏳」与「大文件提议的等待/传输阶段」——两者 State 都是 Sending，但语义不同。
+    /// </summary>
+    private bool _isLargeFileOffer;
+    public bool IsLargeFileOffer
+    {
+        get => _isLargeFileOffer;
+        set
+        {
+            if (!SetProperty(ref _isLargeFileOffer, value)) return;
+            OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(FileCardHint));
+            OnPropertyChanged(nameof(ShowTransferProgress));
+        }
+    }
+
+    /// <summary>大文件提议是否已开始实际传输（对端确认并建立数据连接后，进度 &gt; 0）</summary>
+    public bool IsLargeFileAwaitingAcceptance => IsLargeFileOffer && _progressBytes <= 0;
+
+    /// <summary>是否显示投递状态：发送方总是显示；接收方仅在附件失败/被取消时显示（如「对方已取消传送」）</summary>
+    public bool ShowStateText => IsMine || (IsFile && State == MessageState.Failed);
 
     /// <summary>文件消息的 Shell 类型图标（资源管理器同源）；提取失败回退矢量</summary>
-    public System.Windows.Media.ImageSource? ShellIcon { get; }
+    public System.Windows.Media.ImageSource? ShellIcon { get; private set; }
     public bool HasShellIcon => ShellIcon != null;
+
+    /// <summary>接收完成后由服务层填充附件路径与类型（大文件接收完成时调用）</summary>
+    public void CompleteAttachment(string path, bool isImage)
+    {
+        AttachmentPath = path;
+        IsImage = isImage;
+        AwaitingAcceptance = false;
+        ShellIcon = !isImage ? Services.FileTypeIconCache.GetIconImage(path) : null;
+        // 无参 OnPropertyChanged 在普通方法里等于通知方法名（UI 不刷新），必须逐一显式通知
+        OnPropertyChanged(nameof(AttachmentPath));
+        OnPropertyChanged(nameof(IsImage));
+        OnPropertyChanged(nameof(HasAttachment));
+        OnPropertyChanged(nameof(IsText));
+        OnPropertyChanged(nameof(IsFile));
+        OnPropertyChanged(nameof(ShellIcon));
+        OnPropertyChanged(nameof(HasShellIcon));
+        OnPropertyChanged(nameof(ShowTransferProgress));
+        OnPropertyChanged(nameof(ShowStateText));
+        OnPropertyChanged(nameof(FileCardHint));
+    }
+
+    #region 大文件传输进度
+
+    private long _progressBytes;
+    private long _progressTotal;
+
+    /// <summary>进度百分比 0~100（未在传输中为 0）</summary>
+    public double ProgressPercent => _progressTotal > 0
+        ? Math.Min(100, _progressBytes * 100.0 / _progressTotal)
+        : 0;
+
+    /// <summary>附件正在传输中（含收发两个方向）</summary>
+    public bool IsTransferring => _progressTotal > 0 && State == MessageState.Sending;
+
+    /// <summary>服务层按分块进度调用（收发双向）</summary>
+    public void ReportProgress(long bytes, long total)
+    {
+        _progressTotal = total;
+        _progressBytes = bytes;
+        OnPropertyChanged(nameof(ProgressPercent));
+        OnPropertyChanged(nameof(IsTransferring));
+        OnPropertyChanged(nameof(ShowTransferProgress));
+        OnPropertyChanged(nameof(FileCardHint));
+        OnPropertyChanged(nameof(IsLargeFileAwaitingAcceptance));
+        OnPropertyChanged(nameof(StateText));
+    }
+
+    #endregion
 
     public string TimeText => Timestamp.ToString("HH:mm");
 
@@ -123,17 +245,19 @@ public class ChatMessageViewModel : ViewModelBase
     {
         get
         {
-            if (!IsMine) return "";
+            // 接收方的大文件失败/被取消也要显示状态（如「对方已取消传送」）；其他状态仍是发送方专属
+            if (!IsMine && State != MessageState.Failed) return "";
 
             return State switch
             {
                 // 待发送：对方离线，等其上线后自动补发
                 MessageState.Queued => "⏳ 待发送",
-                MessageState.Sending => "⏳",
+                // 大文件提议：等待对方确认接收 与 实际传输 是两个阶段，文案要分开
+                MessageState.Sending => IsLargeFileAwaitingAcceptance ? "⏳ 等待对方接收" : "⏳",
                 MessageState.Sent => "✓",
                 MessageState.Delivered => "✓✓",
                 MessageState.Read => "✓✓",
-                MessageState.Failed => "❌",
+                MessageState.Failed => string.IsNullOrEmpty(FailureReason) ? "❌" : $"🚫 {FailureReason}",
                 _ => ""
             };
         }
@@ -162,6 +286,10 @@ public class ChatMessageViewModel : ViewModelBase
         {
             if (!SetProperty(ref _state, value)) return;
             OnPropertyChanged(nameof(StateText));
+            OnPropertyChanged(nameof(ShowStateText));
+            OnPropertyChanged(nameof(IsTransferring));
+            OnPropertyChanged(nameof(ShowTransferProgress));
+            OnPropertyChanged(nameof(FileCardHint));
             OnPropertyChanged(nameof(IsFailed));
         }
     }

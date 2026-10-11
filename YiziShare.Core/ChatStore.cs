@@ -223,6 +223,21 @@ public static class ChatStore
         }
     }
 
+    /// <summary>大文件接收完成：填充附件落盘路径并置为已读</summary>
+    public static void UpdateAttachmentPath(string peerId, string msgId, string attachmentPath)
+    {
+        lock (Sync)
+        {
+            var session = _sessions.FirstOrDefault(s => string.Equals(s.PeerId, peerId, StringComparison.Ordinal));
+            var message = session?.Messages.FirstOrDefault(m => string.Equals(m.MsgId, msgId, StringComparison.Ordinal));
+            if (message == null) return;
+
+            message.AttachmentPath = attachmentPath;
+            message.State = MessageState.Read;
+            _dirty = true;
+        }
+    }
+
     /// <summary>记录已读到的最大 MsgId 并清零未读数</summary>
     public static void MarkRead(string peerId, string lastReadMsgId, int unreadCount = 0)
     {

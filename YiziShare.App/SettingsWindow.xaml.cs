@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -64,8 +65,42 @@ public partial class SettingsWindow : Window
         ChkRememberUsername.IsChecked = SettingsStore.GetRememberUsername();
         ChkChatSound.IsChecked = SettingsStore.GetChatSoundEnabled();
         TxtMyNickname.Text = SettingsStore.GetMyNickname();
+        TxtReceiveDir.Text = SettingsStore.GetReceivedDirectory(); // 显示当前实际路径（含默认）
+        UpdateReceiveDirHint();
 
         LoadNetworkAdapters();
+    }
+
+    private void UpdateReceiveDirHint()
+    {
+        ReceiveDirHint.Text = string.IsNullOrWhiteSpace(TxtReceiveDir.Text.Trim())
+            ? "留空使用默认位置（C 盘应用数据目录）"
+            : "聊天接收的图片和文件将保存到此目录";
+    }
+
+    /// <summary>浏览选择接收目录</summary>
+    private void BtnBrowseReceiveDir_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "选择聊天接收文件的保存位置",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true
+        };
+        if (Directory.Exists(TxtReceiveDir.Text.Trim()))
+            dialog.SelectedPath = TxtReceiveDir.Text.Trim();
+
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+        TxtReceiveDir.Text = dialog.SelectedPath;
+        UpdateReceiveDirHint();
+    }
+
+    /// <summary>恢复默认接收目录：直接填入默认路径（避免清空导致用户困惑）</summary>
+    private void BtnResetReceiveDir_Click(object sender, RoutedEventArgs e)
+    {
+        TxtReceiveDir.Text = YiziShare.Core.SettingsStore.DefaultReceivedDirectory;
+        UpdateReceiveDirHint();
     }
 
     private void LoadNetworkAdapters()
@@ -95,6 +130,9 @@ public partial class SettingsWindow : Window
         var myNick = TxtMyNickname.Text.Trim();
         SettingsStore.SetMyNickname(myNick);
         _viewModel.SetLocalChatName(myNick);
+
+        // 文件接收目录：留空 = 默认位置；目录变更后即刻对之后的接收生效
+        SettingsStore.SetReceivedDirectory(TxtReceiveDir.Text.Trim());
 
         if (CmbNetworkAdapter.SelectedItem is string adapter)
             SettingsStore.SetSelectedAdapter(adapter);

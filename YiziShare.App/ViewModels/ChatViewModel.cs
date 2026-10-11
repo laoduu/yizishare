@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.IO;
 using YiziShare.Core;
@@ -21,7 +22,149 @@ public class ChatViewModel : ViewModelBase
         _service.PeerResolved += OnPeerResolved;
         _service.PeerDisconnected += OnPeerDisconnected;
         _service.DeliveryChanged += OnDeliveryChanged;
+        _service.FileTransferProgress += OnFileTransferProgress;
+        _service.FileTransferCancelled += OnFileTransferCancelled;
+        _service.FileOfferReceived += OnFileOfferReceived;
     }
+
+    /// <summary>待用户确认的大文件接收请求：FileId → (Offer 信封, 对端地址)，供「接收/拒绝」执行</summary>
+    private readonly ConcurrentDictionary<string, (ChatEnvelope Offer, string PeerIp, int PeerPort)> _pendingIncomingFiles = new(StringComparer.Ordinal);
+
+    /// <summary>收到大文件接收提议：创建「待接收」气泡（含 接收/拒绝 按钮），不自动拉取</summary>
+    private void OnFileOfferReceived(object? sender, InboundChatEventArgs args)
+    {
+        var offer = args.Envelope;
+
+        PostToUi(() =>
+        {
+            var conversation = EnsureConversation(offer.NodeId, args.PeerIp, offer.Name);
+            if (conversation.PeerPort <= 0) conversation.PeerPort = ChatConstants.TcpPort;
+
+            _pendingIncomingFiles[offer.FileId] = (offer, args.PeerIp, args.PeerPort);
+
+            var displayName = string.IsNullOrEmpty(offer.FileName) ? "[大文件]" : offer.FileName;
+            // 传输期一律按「文件卡片」渲染（即使是大图片）：卡片才承载 接收/拒绝 按钮与进度条；
+            // 完成后 CompleteAttachment(path, isImage) 再按真实类型切到图片展示
+            var message = new ChatMessageViewModel(offer.MsgId, false, displayName,
+                DateTime.Now, MessageState.Sending, isAttachment: true, isImage: false, attachmentPath: "");
+            conversation.AppendMessage(message);
+            // 待用户确认：显示「接收 / 拒绝」按钮（漏设则按钮组永不显示——已实测踩坑）
+            message.AwaitingAcceptance = true;
+            message.IsLargeFileOffer = true;
+
+            ChatStore.AppendMessage(conversation.PeerId, conversation.PeerIp, conversation.PeerName,
+                new ChatMessageRecord
+                {
+                    MsgId = offer.MsgId,
+                    IsMine = false,
+                    Text = displayName,
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    State = MessageState.Sending,
+                    IsImage = false, // 同上：接收中按文件卡片落盘，避免重载后出现空图片气泡
+                    AttachmentName = offer.FileName
+                },
+                isIncoming: true);
+
+            SortConversations();
+            StatusRequested?.Invoke(this, $"📥 {conversation.PeerName} 发来文件 {displayName}，请在卡片上选择接收或拒绝");
+            // 待接收卡片进入视野（若是当前会话则自动下滚，避免按钮在窗口外被遮挡）
+            RaiseAttachmentStateChanged(message);
+            MessageReceivedInBackground?.Invoke(this, conversation);
+        });
+    }
+
+    /// <summary>用户确认接收：回拨发送方拉取（进度条在原气泡上继续显示）</summary>
+    public void AcceptFile(string msgId)
+    {
+        if (!_pendingIncomingFiles.TryRemove(msgId, out var pending))
+            return;
+
+        var conversation = Conversations.FirstOrDefault(c =>
+            c.Messages.Any(m => string.Equals(m.MsgId, msgId, StringComparison.Ordinal)));
+        // 清除待确认态（按钮组收起，进度条接管）；附件路径在完成时由服务层填充
+        if (conversation?.Messages.FirstOrDefault(m => string.Equals(m.MsgId, msgId, StringComparison.Ordinal))
+            is { } receivingMsg)
+        {
+            receivingMsg.AwaitingAcceptance = false;
+            RaiseAttachmentStateChanged(receivingMsg);
+        }
+
+        _ = _service.AcceptLargeFileAsync(msgId);
+    }
+
+    /// <summary>
+    /// 用户拒绝接收：本端气泡显示「已拒绝接收」（我方动作），对端显示「对方拒绝接收」（peerReason）。<br/>
+    /// 拒绝后按钮组立即收起——拒绝是终态，不允许「先拒绝后同意」的恢复路径（需发送方重新发起）。
+    /// </summary>
+    public void RejectFile(string msgId, string peerReason)
+    {
+        if (_pendingIncomingFiles.TryRemove(msgId, out _))
+        {
+            if (FindMessageById(msgId) is { } msg)
+            {
+                msg.AwaitingAcceptance = false; // 收起「接收/拒绝」按钮组，防止拒绝后仍可点接收
+                msg.FailureReason = "已拒绝接收";
+                msg.State = MessageState.Failed;
+                RaiseAttachmentStateChanged(msg);
+            }
+            _ = _service.RejectLargeFileAsync(msgId, peerReason);
+        }
+    }
+
+    /// <summary>
+    /// 对端中止了大文件传输：文案取自对端实报——「对方拒绝接收」（开场即拒绝）或「对方已取消传送」（传送中取消）。<br/>
+    /// 两者语义不同（拒绝=未开始，取消=过程中中断），必须区分，不能本端硬编码。
+    /// </summary>
+    private void OnFileTransferCancelled(object? sender, FileAbortEventArgs e)
+    {
+        PostToUi(() =>
+        {
+            if (FindMessageById(e.FileId) is not { } msg) return;
+            msg.AwaitingAcceptance = false;
+            msg.FailureReason = string.IsNullOrEmpty(e.Reason) ? "对方已取消传送" : e.Reason;
+            msg.State = MessageState.Failed;
+            RaiseAttachmentStateChanged(msg);
+            StatusRequested?.Invoke(this, $"🚫 {msg.FailureReason}");
+        });
+    }
+
+    /// <summary>附件消息进入终态（完成/失败/取消）：供 UI 自动下滚显示最新状态</summary>
+    public event EventHandler<string>? AttachmentStateChanged;
+
+    private void RaiseAttachmentStateChanged(ChatMessageViewModel msg) => AttachmentStateChanged?.Invoke(this, msg.MsgId);
+
+    /// <summary>按 MsgId 在全部会话中定位消息（进度事件高频，遍历成本可接受）</summary>
+    private ChatMessageViewModel? FindMessageById(string msgId)
+        => Conversations.SelectMany(c => c.Messages)
+            .FirstOrDefault(m => string.Equals(m.MsgId, msgId, StringComparison.Ordinal));
+
+    /// <summary>消息是否属于当前查看的会话（供 UI 决定是否自动下滚）</summary>
+    public bool IsMessageInSelectedConversation(string msgId)
+        => SelectedConversation?.Messages.Any(m => string.Equals(m.MsgId, msgId, StringComparison.Ordinal)) == true;
+
+    /// <summary>大文件分块进度 → 对应气泡的进度条（事件在后台线程，需切 UI）</summary>
+    private void OnFileTransferProgress(object? sender, FileTransferProgressEventArgs e)
+    {
+        PostToUi(() =>
+        {
+            FindMessageById(e.FileId)?.ReportProgress(e.BytesDone, e.TotalBytes);
+        });
+    }
+
+    /// <summary>取消进行中的大文件传输（本地气泡立即显示"已取消传送"，对端显示"对方已取消传送"）</summary>
+    public void CancelFileTransfer(string fileId)
+    {
+        if (FindMessageById(fileId) is { } msg)
+        {
+            msg.FailureReason = "已取消传送";
+            msg.State = MessageState.Failed;
+            RaiseAttachmentStateChanged(msg);
+        }
+        _service.CancelFileTransfer(fileId);
+    }
+
+    /// <summary>登记定向单播心跳目标（扫描发现的设备 IP，广播被防火墙拦截时的兜底发现途径）</summary>
+    public void RegisterUnicastPeer(string ip) => _service.RegisterUnicastPeer(ip);
 
     /// <summary>界面显示名（昵称优先，回退主机名）</summary>
     public string LocalName
@@ -179,26 +322,48 @@ public class ChatViewModel : ViewModelBase
         var isImage = IsImageFile(filePath);
         var name = Path.GetFileName(filePath);
         var size = new FileInfo(filePath).Length;
-        if (size > ChatConstants.MaxAttachmentBytes)
-        {
-            StatusRequested?.Invoke(this, $"❌ {name} 超过 5MB，暂不支持发送更大的文件");
-            return false;
-        }
 
-        var msgId = await _service.SendAttachmentAsync(
-            conversation.PeerId, conversation.PeerIp, conversation.PeerPort, filePath, isImage);
-        if (msgId == null)
+        string? msgId;
+        if (size <= ChatConstants.MaxAttachmentBytes)
         {
-            StatusRequested?.Invoke(this, $"❌ 发送 {name} 失败");
-            return false;
+            // ≤5MB：单帧内联（支持离线补发）
+            msgId = await _service.SendAttachmentAsync(
+                conversation.PeerId, conversation.PeerIp, conversation.PeerPort, filePath, isImage);
+            if (msgId == null)
+            {
+                StatusRequested?.Invoke(this, $"❌ 发送 {name} 失败");
+                return false;
+            }
+        }
+        else
+        {
+            // >5MB：流式传输，需对方在线（P2P 无离线暂存）
+            if (!conversation.IsOnline)
+            {
+                StatusRequested?.Invoke(this, $"❌ {conversation.PeerName} 离线，大于 5MB 的文件需要对方在线才能发送");
+                return false;
+            }
+
+            msgId = await _service.SendFileLargeAsync(
+                conversation.PeerId, conversation.PeerIp, conversation.PeerPort, filePath);
+            if (msgId == null)
+            {
+                StatusRequested?.Invoke(this, $"❌ 发送 {name} 失败");
+                return false;
+            }
         }
 
         // 预览文本：图片统一显示 [图片]，文件显示文件名
         var previewText = isImage ? "[图片]" : name;
+        // 大文件走流式通道：传输期按文件卡片渲染（承载进度条 + 取消），完成后按真实类型切回图片
         var message = new ChatMessageViewModel(msgId, true, previewText, DateTime.Now, MessageState.Sending,
-            isImage: isImage, attachmentPath: filePath);
+            isAttachment: true, isImage: isImage && size <= ChatConstants.MaxAttachmentBytes, attachmentPath: filePath);
         conversation.AppendMessage(message);
         message.State = _service.GetDeliveryState(msgId);
+        // 大文件：标记流式通道，并补发 Offer 阶段丢失的 0% 进度事件（事件先于气泡创建）；
+        // 内联附件不初始化进度——否则 5MB 以下文件也会闪出一条无意义的进度条
+        message.IsLargeFileOffer = size > ChatConstants.MaxAttachmentBytes;
+        if (message.IsLargeFileOffer) message.ReportProgress(0, size);
 
         ChatStore.AppendMessage(conversation.PeerId, conversation.PeerIp, conversation.PeerName,
             new ChatMessageRecord
@@ -230,6 +395,15 @@ public class ChatViewModel : ViewModelBase
     {
         var conversation = SelectedConversation;
         if (conversation == null || message == null) return;
+
+        // 附件消息（图片/文件）重试走 SendAttachmentAsync（自动按大小分流内联/流式）
+        if (message.HasAttachment && File.Exists(message.AttachmentPath))
+        {
+            conversation.Messages.Remove(message);
+            ChatStore.RemoveMessage(conversation.PeerId, message.MsgId);
+            _ = SendAttachmentAsync(message.AttachmentPath);
+            return;
+        }
 
         var msgId = _service.SendChatAsync(conversation.PeerId, conversation.PeerIp, conversation.PeerPort, message.Text);
 
@@ -375,7 +549,9 @@ public class ChatViewModel : ViewModelBase
             foreach (var record in session.Messages)
             {
                 var message = new ChatMessageViewModel(record.MsgId, record.IsMine, record.Text,
-                    DateTimeOffset.FromUnixTimeMilliseconds(record.Timestamp).LocalDateTime, record.State);
+                    DateTimeOffset.FromUnixTimeMilliseconds(record.Timestamp).LocalDateTime, record.State,
+                    isAttachment: record.IsImage || !string.IsNullOrEmpty(record.AttachmentPath),
+                    isImage: record.IsImage, attachmentPath: record.AttachmentPath);
                 conversation.AppendMessage(message);
             }
 
@@ -437,20 +613,44 @@ public class ChatViewModel : ViewModelBase
             conversation.IsOnline = true;
             if (conversation.PeerPort <= 0) conversation.PeerPort = ChatConstants.TcpPort;
 
-            // 展示文本：文本消息用原文（此前误用空附件路径的文件名，导致接收端空气泡+空横幅预览）；
-            // 图片统一 [图片]；文件用文件名
-            var isImage = args.IsImage;
             var attachmentPath = args.AttachmentPath;
+            // 大文件接收中：FileOffer 到达（无落盘路径），状态保持 Sending 并显示进度条
+            var isReceivingStart = envelope.Kind == ChatMessageKind.FileOffer && string.IsNullOrEmpty(attachmentPath);
+            // 传输期一律按文件卡片渲染（承载进度条/取消）；大图片也在完成时由 CompleteAttachment 切回图片
+            var isImage = args.IsImage && !isReceivingStart;
             var displayName = isImage ? "[图片]"
                 : !string.IsNullOrEmpty(attachmentPath) ? Path.GetFileName(attachmentPath)
+                : !string.IsNullOrEmpty(envelope.FileName) ? envelope.FileName
                 : envelope.Text;
 
-            var message = new ChatMessageViewModel(envelope.MsgId, false, displayName,
-                DateTime.Now, MessageState.Read, isImage: isImage, attachmentPath: attachmentPath);
+            var state = isReceivingStart ? MessageState.Sending : MessageState.Read;
 
-            // 同一 MsgId 只显示一次：传输层已修正双连接问题，这里做幂等兜底
+            var message = new ChatMessageViewModel(envelope.MsgId, false, displayName,
+                DateTime.Now, state, isAttachment: isImage || !string.IsNullOrEmpty(attachmentPath) || isReceivingStart,
+                isImage: isImage, attachmentPath: attachmentPath);
+            // 接收中：0% 进度初始化（Offer 事件先于气泡创建的时序问题，同发送方）
+            if (isReceivingStart)
+                message.ReportProgress(0, 1); // total 仅用于占比 0%，total=1 避免 0/0
+
+            // 同一 MsgId 只显示一次：传输层已修正双连接问题，这里做幂等兜底；
+            // 大文件接收中气泡已存在（MsgId 相同）→ 此处为完成回调：填充附件路径并转为可保存
             if (!conversation.AppendMessage(message))
+            {
+                // 「接收起始」回调（AttachmentPath 为空）只表示开始拉取：气泡早已由 FileOffer 建好并带进度条，
+                // 若在此按"完成"处理会把卡片置为 Read → 进度条与取消按钮永久消失（已实测踩坑）
+                if (isReceivingStart) return;
+
+                var existing = conversation.Messages
+                    .FirstOrDefault(m => string.Equals(m.MsgId, envelope.MsgId, StringComparison.Ordinal));
+                if (existing != null)
+                {
+                    existing.CompleteAttachment(attachmentPath, isImage);
+                    existing.State = MessageState.Read;
+                }
+                ChatStore.UpdateState(conversation.PeerId, envelope.MsgId, MessageState.Read);
+                ChatStore.UpdateAttachmentPath(conversation.PeerId, envelope.MsgId, attachmentPath);
                 return;
+            }
 
             // 无论聊天面板是否打开都立即落盘，否则关掉应用就丢了
             ChatStore.AppendMessage(conversation.PeerId, conversation.PeerIp, conversation.PeerName,
@@ -491,6 +691,8 @@ public class ChatViewModel : ViewModelBase
     {
         // 先原样转发给设备列表（同步对端自报昵称与在线态），再做聊天侧处理
         PeerPresenceChanged?.Invoke(this, peer);
+
+        Logger.Info($"对端上线: {peer.PeerName}({peer.PeerId}) ip={peer.PeerIp}");
 
         PostToUi(() =>
         {
@@ -559,6 +761,16 @@ public class ChatViewModel : ViewModelBase
             message.State = args.State;
             ChatStore.UpdateState(args.PeerId, args.MsgId, args.State);
 
+            // 大文件（含图片）送达后：发送方也切回图片展示（传输期统一按文件卡片渲染）
+            if (message.IsMine && message.IsLargeFileOffer && !message.IsImage
+                && args.State is MessageState.Delivered or MessageState.Read
+                && IsImageFile(message.AttachmentPath))
+                message.CompleteAttachment(message.AttachmentPath, true);
+
+            // 附件消息进入终态（完成/失败/取消）：通知 UI 自动下滚显示最新状态
+            if (message.HasAttachment && args.State is MessageState.Failed or MessageState.Delivered or MessageState.Read)
+                RaiseAttachmentStateChanged(message);
+
             // 回执到达时同步状态栏：失败要报错，成功则把上一次的失败提示冲掉
             switch (args.State)
             {
@@ -572,7 +784,10 @@ public class ChatViewModel : ViewModelBase
                     StatusRequested?.Invoke(this, $"👁 {conversation.PeerName} 已读");
                     break;
                 case MessageState.Failed:
-                    StatusRequested?.Invoke(this, $"❌ 发送失败：{conversation.PeerName} 未响应");
+                    // 有明确原因（主动取消/被拒绝/被取消）时如实显示；无原因才是网络未响应
+                    StatusRequested?.Invoke(this, string.IsNullOrEmpty(message.FailureReason)
+                        ? $"❌ 发送失败：{conversation.PeerName} 未响应"
+                        : $"🚫 {message.FailureReason}");
                     break;
             }
         });

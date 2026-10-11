@@ -7,7 +7,7 @@ namespace YiziShare.App;
 public partial class App : WpfApplication
 {
     /// <summary>应用版本号（发版时与 VERSION_LOG 同步更新）</summary>
-    public const string Version = "0.9.34";
+    public const string Version = "0.9.36";
 
     protected override void OnStartup(StartupEventArgs e)
     {
