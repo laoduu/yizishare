@@ -4,9 +4,11 @@
 
 <img src="YiziShare.App/Assets/logo.png" width="96" alt="YiziShare">
 
-**局域网里的 QQ —— 聊天、传文件、共享文件夹**
+**局域网里，畅聊秒传 —— 聊天 · 共享 · 传文件**
 
 无需服务器 · 无需联网 · 数据不出内网
+
+**[🌐 访问官网](https://share.yizigpt.com) · [⬇️ 下载最新版](https://github.com/laoduu/yizishare/releases)**
 
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![Windows](https://img.shields.io/badge/Windows-WPF-0078D4)
@@ -135,7 +137,7 @@ dotnet publish YiziShare.App/YiziShare.App.csproj -c Release -r win-x64 `
 - **发现**：UDP 心跳宣告 `NodeId`（持久化设备身份，重装可恢复）、昵称与 TCP 端口；15 秒无心跳判定离线
 - **传输**：TCP 点对点，4 字节长度前缀 + UTF-8 JSON 帧；双向拨号用 NodeId 字典序仲裁，只保留一条链路
 - **可靠性**：每条消息有 MsgId 幂等去重、Delivered/Read 回执、离线待发队列、投递状态机（含超时降级）
-- **文件**：单帧内联 base64（≤5MB），接收方落盘至 `%LOCALAPPDATA%\YiziShare\Received\`
+- **文件**：≤5MB 走单帧内联 base64（`MaxAttachmentBytes`）；超出则走独立数据通道，接收方确认后回拨同端口，以原始二进制流传输（1MiB 缓冲），无大小上限。两者均落盘至 `%LOCALAPPDATA%\YiziShare\Received\`
 
 ### 🔒 隐私与安全
 
@@ -184,6 +186,17 @@ YiziShare/
 
 ---
 
+## 🔗 相关链接
+
+| 资源 | 地址 |
+|------|------|
+| 🌐 官方网站 | **https://share.yizigpt.com** |
+| ⬇️ 下载最新版 | https://github.com/laoduu/yizishare/releases |
+| 💻 源码仓库 | https://github.com/laoduu/yizishare |
+| 🐛 问题反馈 | https://github.com/laoduu/yizishare/issues |
+
+---
+
 ## 📄 许可证
 
 [MIT](LICENSE)
@@ -195,6 +208,6 @@ YiziShare/
 ## 🔮 路线图
 
 - 🔐 聊天传输加密（AES-GCM，协议已预留版本字段）
-- 📦 大文件分块传输与断点续传（当前单文件 ≤5MB）
+- 📦 大文件断点续传（v0.9.36 已支持无大小上限的流式传输，续传能力待补）
 - 🖼 图片消息缩略图与查看器
 - 👥 群聊

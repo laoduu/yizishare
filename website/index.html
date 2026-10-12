@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YiziShare — 局域网里，畅聊秒传｜局域网聊天与文件共享工具</title>
+<meta name="description" content="YiziShare 是一款 Windows 局域网即时通讯与文件共享工具：自动发现同网段设备，即时聊天、传文件、浏览共享文件夹，无需服务器、无需联网、数据不出内网。基于 .NET 8 + WPF 构建，MIT 开源。">
+<meta name="keywords" content="YiziShare,局域网聊天,局域网传文件,SMB共享,局域网即时通讯,内网聊天,WPF,文件传输,局域网共享文件夹,免服务器">
+<meta name="author" content="YiziShare">
+<meta name="theme-color" content="#1C1913">
+<link rel="canonical" href="https://share.yizigpt.com/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="YiziShare">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:url" content="https://share.yizigpt.com/">
+<meta property="og:title" content="YiziShare — 局域网里，畅聊秒传">
+<meta property="og:description" content="局域网里，畅聊秒传：聊天、共享、传文件一站搞定。自动发现同网段设备，无需服务器、无需联网，数据不出内网。">
+<!-- og:image 必须是绝对地址：抓取器不解析相对路径，相对地址会导致分享卡片没图 -->
+<meta property="og:image" content="https://share.yizigpt.com/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="YiziShare — 局域网里，畅聊秒传：聊天、共享、传文件">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://share.yizigpt.com/assets/og-cover.png">
+<!-- favicon.ico 置于站点根目录：浏览器在页面未声明图标时会自动请求 /favicon.ico，
+     部分阅读器与 Windows 快捷方式也只认 ICO。该文件内含 16/32/48 三个尺寸。
+     下面 PNG 版留给高分屏浏览器择优使用 -->
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="128x128" href="assets/icon.png">
+<!-- iOS 主屏图标推荐 180x180。已压平到暖黑底：原 logo 是透明背景、给深色表面设计的，
+     留透明会被 iOS 合成到黑底上产生硬边 -->
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="stylesheet" href="assets/css/style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "YiziShare",
+  "alternateName": "亦子共享",
+  "applicationCategory": "UtilitiesApplication",
+  "applicationSubCategory": "局域网即时通讯与文件共享",
+  "operatingSystem": "Windows 10, Windows 11",
+  "softwareVersion": "0.9.36",
+  "fileSize": "自包含单文件发布",
+  "inLanguage": "zh-CN",
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://share.yizigpt.com/",
+  "downloadUrl": "https://github.com/laoduu/yizishare/releases",
+  "isAccessibleForFree": true,
+  "description": "Windows 局域网即时通讯与文件共享工具：自动发现同网段设备，即时聊天、传文件、浏览共享文件夹，无需服务器、无需联网、数据不出内网。",
+  "featureList": [
+    "UDP 广播自动发现同网段设备",
+    "局域网即时聊天与彩色表情",
+    "大文件流式传输（无大小上限）",
+    "共享文件夹内置浏览与拖放上传下载",
+    "SMB 连接智能诊断与一键修复",
+    "网络唤醒（Wake-on-LAN）"
+  ],
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+  "codeRepository": "https://github.com/laoduu/yizishare"
+}
+</script>
+</head>
+<body>
+
+<!-- ============ 图标精灵：统一 24 网格 / 1.75 描边，对齐应用 MDL2 矢量体系 ============ -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.6a7.6 7.6 0 0 1-11 6.8L5 19.6l1.3-4.2a7.6 7.6 0 1 1 14.2-3.8Z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.6a2 2 0 0 1 2-2h3.1a2 2 0 0 1 1.6.8l1 1.3H19a2 2 0 0 1 2 2v7.7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.4"/><path d="M12 7.2a4.8 4.8 0 0 1 4.8 4.8"/><path d="M12 3.6a8.4 8.4 0 0 1 8.4 8.4"/><path d="M12 16.8A4.8 4.8 0 0 1 7.2 12"/><path d="M12 20.4A8.4 8.4 0 0 1 3.6 12"/></symbol>
+  <symbol id="i-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M9.1 10h.02M14.9 10h.02"/><path d="M8.6 14.1a4.4 4.4 0 0 0 6.8 0"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.1 1.9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.8 20.2a7.4 7.4 0 0 1 14.4 0"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9.4a6 6 0 1 0-12 0c0 4.8-2 6.2-2 6.2h16s-2-1.4-2-6.2Z"/><path d="M10.3 19.1a2 2 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.6"/><path d="m15.9 15.9 4.4 4.4"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M20.2 5.5a1 1 0 0 0-1.6-.3l-2 2-1.7-.5-.5-1.7 2-2a1 1 0 0 0-.3-1.6 5.4 5.4 0 0 0-6.5 7.1l-6 6a1.4 1.4 0 0 0 2 2l6-6a5.4 5.4 0 0 0 6.6-6.5Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.4 19 6v5.4c0 4-2.9 7.4-7 8.2-4.1-.8-7-4.2-7-8.2V6Z"/><path d="m9.2 12.1 2 2 3.6-4.1"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M12 3.6v9.2"/><path d="M8.6 9.4 12 12.8l3.4-3.4"/><path d="M4.6 15.2v3a1.6 1.6 0 0 0 1.6 1.6h11.6a1.6 1.6 0 0 0 1.6-1.6v-3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.8 12.6 4.9 4.9L19.2 7.2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.1 14.3A8.6 8.6 0 0 1 9.7 3.9a8.6 8.6 0 1 0 10.4 10.4Z"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.6v7.8"/><path d="M7.9 6.4a7 7 0 1 0 8.2 0"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3.6 3.8 8 12 12.4 20.2 8Z"/><path d="m3.8 12.4 8.2 4.4 8.2-4.4"/><path d="m3.8 16.6 8.2 4.4 8.2-4.4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.2 12a8.2 8.2 0 0 1-14 5.8"/><path d="M3.8 12a8.2 8.2 0 0 1 14-5.8"/><path d="M4 19.6v-4.2h4.2"/><path d="M20 4.4v4.2h-4.2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.4a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.6v10.6"/><path d="M7.6 9.8 12 14.2l4.4-4.4"/><path d="M4.6 19.8h14.8"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3.4" y="4.6" width="17.2" height="11.4" rx="1.6"/><path d="M9.4 20h5.2M12 16v4"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3.6" y="4.4" width="16.8" height="6" rx="1.6"/><rect x="3.6" y="13.6" width="16.8" height="6" rx="1.6"/><path d="M7.4 7.4h.02M7.4 16.6h.02"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.8" y="10.4" width="14.4" height="9.4" rx="2"/><path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6.6h.02M4 12h.02M4 17.4h.02"/><path d="M8.4 6.6h11.6M8.4 12h11.6M8.4 17.4h11.6"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.2" y="4.2" width="6.4" height="6.4" rx="1.2"/><rect x="13.4" y="4.2" width="6.4" height="6.4" rx="1.2"/><rect x="4.2" y="13.4" width="6.4" height="6.4" rx="1.2"/><rect x="13.4" y="13.4" width="6.4" height="6.4" rx="1.2"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 2.2a9.8 9.8 0 0 0-3.1 19.1c.5.1.7-.2.7-.5v-1.8c-2.7.6-3.3-1.3-3.3-1.3-.4-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.2-4.5-1.1-4.5-4.9 0-1.1.4-2 1-2.6-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.5 1 2.6 0 3.8-2.3 4.7-4.5 4.9.4.3.7.9.7 1.8v2.7c0 .3.2.6.7.5A9.8 9.8 0 0 0 12 2.2Z"/></symbol>
+  <symbol id="i-windows" viewBox="0 0 24 24"><path d="M3.4 6.1 10.4 5v6.5H3.4Zm0 11.8L10.4 19v-6.4H3.4Zm8.2 1.3 9-1.3v-6.4h-9Zm0-14.2v6.5h9V4.7Z"/></symbol>
+</svg>
+
+<!-- ================= 导航 ================= -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="YiziShare 首页">
+      <img class="brand-logo" src="assets/icon.png" alt="YiziShare 图标" width="34" height="34">
+      <span class="brand-text">Yizi<span class="brand-share">Share</span></span>
+      <span class="brand-tag">局域网聊天 · 文件共享</span>
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="主导航">
+      <a href="#features">核心功能</a>
+      <a href="#how">工作原理</a>
+      <a href="#guide">使用指南</a>
+      <a href="#changelog">更新日志</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="btn btn-ghost" href="https://github.com/laoduu/yizishare" target="_blank" rel="noopener">
+        <svg class="ico sm solid" aria-hidden="true"><use href="#i-github"/></svg>GitHub
+      </a>
+      <a class="btn btn-primary" href="https://github.com/laoduu/yizishare/releases" target="_blank" rel="noopener">
+        <svg class="ico sm" aria-hidden="true"><use href="#i-download"/></svg>下载
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="展开菜单" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ================= Hero ================= -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <span class="badge reveal">
+          <span class="badge-dot" aria-hidden="true"></span>v0.9.36 · 无服务器 · 无需联网 · 数据不出内网
+        </span>
+        <h1 class="reveal">局域网里，畅聊秒传<br><span class="grad">聊天 · 共享 · 传文件</span></h1>
+        <p class="hero-sub reveal">
+          打开即用，自动发现同网段设备。像聊 QQ 一样聊天，像发消息一样传文件，
+          像浏览本机一样翻看共享文件夹——全部在局域网内完成，无需服务器，无需登录，数据永不离开内网。
+        </p>
+        <div class="hero-actions reveal">
+          <a class="btn btn-primary btn-lg" href="https://github.com/laoduu/yizishare/releases" target="_blank" rel="noopener">
+            <svg class="ico solid" aria-hidden="true"><use href="#i-windows"/></svg>下载 Windows 版
+          </a>
+          <a class="btn btn-outline btn-lg" href="#features">了解功能</a>
+        </div>
+        <ul class="hero-chips reveal">
+          <li><svg class="ico sm solid" aria-hidden="true"><use href="#i-windows"/></svg>Windows 10 / 11 · x64</li>
+          <li><svg class="ico sm" aria-hidden="true"><use href="#i-lock"/></svg>绿色便携 · 免安装</li>
+          <li><svg class="ico sm" aria-hidden="true"><use href="#i-check"/></svg>MIT 开源协议</li>
+        </ul>
+      </div>
+
+      <!-- ===== 应用界面还原：结构与 MainWindow.xaml 一致 ===== -->
+      <div class="hero-mock reveal">
+        <div class="app" aria-hidden="true">
+          <!-- 标题栏：暖黑渐变 + 金色顶部高光 -->
+          <div class="app-bar">
+            <img class="app-bar-logo" src="assets/icon.png" alt="" width="20" height="20">
+            <span class="app-bar-title">YiziShare</span>
+            <span class="app-bar-tools">
+              <svg class="ico sm"><use href="#i-refresh"/></svg>
+              <svg class="ico sm"><use href="#i-settings"/></svg>
+              <svg class="ico sm"><use href="#i-moon"/></svg>
+            </span>
+            <span class="app-bar-sep"></span>
+            <span class="app-bar-wins"><i>─</i><i>▢</i><i>✕</i></span>
+          </div>
+
+          <div class="app-body">
+            <!-- 左栏：搜索胶囊 + 筛选/排序 + 设备列表 -->
+            <aside class="app-side">
+              <div class="app-search">
+                <svg class="ico xs"><use href="#i-search"/></svg>
+                <span>搜索设备名称或 IP...</span>
+              </div>
+              <div class="app-filters">
+                <span>筛选:</span><b>所有</b><span>排序:</span><b>IP</b>
+              </div>
+              <div class="app-devices">
+                <div class="dev is-chat is-sel">
+                  <span class="dev-av">N<span class="dev-dot chat pulse"></span></span>
+                  <span class="dev-info">
+                    <b>NAS-DS1522</b>
+                    <small>192.168.1.32</small>
+                    <small class="dev-st">YiziShare 在线</small>
+                  </span>
+                </div>
+                <div class="dev is-chat">
+                  <span class="dev-av">我<span class="dev-dot chat pulse"></span><span class="dev-unread pulse-badge">2</span></span>
+                  <span class="dev-info">
+                    <b>我的主机</b>
+                    <small>192.168.1.10</small>
+                    <small class="dev-st">YiziShare 在线</small>
+                  </span>
+                </div>
+                <div class="dev">
+                  <span class="dev-av">电<span class="dev-dot dev-only"></span></span>
+                  <span class="dev-info">
+                    <b>客厅电视盒子</b>
+                    <small>192.168.1.77</small>
+                    <small class="dev-st">仅设备在线</small>
+                  </span>
+                </div>
+                <div class="dev is-off">
+                  <span class="dev-av">本<span class="dev-dot off"></span></span>
+                  <span class="dev-info">
+                    <b>同事的笔记本</b>
+                    <small>192.168.1.58</small>
+                    <small class="dev-st">离线 · 可唤醒</small>
+                  </span>
+                </div>
+              </div>
+            </aside>
+
+            <!-- 右栏：设备信息头 + 聊天/共享 标签条 + 内容 -->
+            <section class="app-main">
+              <div class="app-head">
+                <span class="app-head-av">N</span>
+                <span class="app-head-txt">
+                  <b>NAS-DS1522</b>
+                  <small>192.168.1.32 · 2 个共享</small>
+                </span>
+                <span class="app-head-badge">在线</span>
+              </div>
+
+              <!-- 标签条：聊天在左为默认，共享在右；激活侧下方 60px 金色指示条 -->
+              <div class="app-tabs" role="tablist" data-active="chat">
+                <button class="app-tab is-on" type="button" role="tab" aria-selected="true" data-view="chat" tabindex="-1">
+                  <svg class="ico xs"><use href="#i-chat"/></svg>聊天
+                </button>
+                <button class="app-tab" type="button" role="tab" aria-selected="false" data-view="share" tabindex="-1">
+                  <svg class="ico xs"><use href="#i-folder"/></svg>共享
+                </button>
+                <span class="app-ind demo"></span>
+              </div>
+
+              <!-- 聊天 / 共享 两页叠放在同一网格格里，靠透明度交叉切换 -->
+              <div class="app-panes">
+
+                <!-- 聊天视图 -->
+                <div class="app-pane is-on demo" data-pane="chat">
+                  <div class="app-stream">
+                    <div class="bub in bub-typing demo demo-typing"><i></i><i></i><i></i></div>
+                    <div class="bub in demo demo-b1">设计稿发你，直接收一下</div>
+                    <div class="bub out demo demo-b2">
+                      <span class="fcard">
+                        <svg class="ico"><use href="#i-files"/></svg>
+                        <span class="fcard-meta">
+                          <b>design-draft.psd</b>
+                          <span class="fcard-bar demo demo-barwrap"><i class="demo demo-bar"></i></span>
+                          <small class="fcard-st">
+                            <span class="demo demo-st-send">148.6 MB · 传输中</span>
+                            <span class="demo demo-st-done">148.6 MB · 已送达</span>
+                          </small>
+                        </span>
+                      </span>
+                    </div>
+                    <div class="bub in demo demo-b3">收到！这速度可以</div>
+                  </div>
+                  <div class="app-input">
+                    <svg class="ico xs"><use href="#i-emoji"/></svg>
+                    <svg class="ico xs"><use href="#i-files"/></svg>
+                    <span class="app-input-hint">输入消息…</span>
+                    <span class="app-send">发送</span>
+                  </div>
+                </div>
+
+                <!-- 共享视图：共享卡片 + 内置浏览 -->
+                <div class="app-pane demo" data-pane="share">
+                  <div class="app-shares">
+                    <div class="scard demo demo-s1">
+                      <svg class="ico gold"><use href="#i-folder"/></svg>
+                      <span class="scard-meta"><b>公共资料</b><small>\\NAS-DS1522\public</small></span>
+                      <span class="scard-open">打开</span>
+                    </div>
+                    <div class="scard demo demo-s2">
+                      <svg class="ico gold"><use href="#i-folder"/></svg>
+                      <span class="scard-meta"><b>家庭影音</b><small>\\NAS-DS1522\media</small></span>
+                      <span class="scard-open">打开</span>
+                    </div>
+                  </div>
+                  <div class="app-browser demo demo-br">
+                    <div class="app-browser-bar">
+                      <span class="abb-back"><svg class="ico xs"><use href="#i-refresh"/></svg></span>
+                      <span class="abb-path">\\NAS-DS1522\media\2026</span>
+                      <span class="abb-tools">
+                        <svg class="ico xs"><use href="#i-files"/></svg>
+                        <svg class="ico xs"><use href="#i-grid"/></svg>
+                      </span>
+                    </div>
+                    <div class="app-browser-head"><span>名称</span><span>大小</span><span>修改时间</span></div>
+                    <div class="app-browser-row"><span><svg class="ico xs gold"><use href="#i-folder"/></svg>春节照片</span><span>—</span><span>2026-02-14</span></div>
+                    <div class="app-browser-row"><span><svg class="ico xs"><use href="#i-files"/></svg>全家福.mp4</span><span>1.2 GB</span><span>2026-02-14</span></div>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+          </div>
+        </div>
+        <p class="mock-cap">正在自动演示 <b>聊天</b> / <b>共享</b> 两个视图 · 悬停暂停，点标签接管</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 技术规格条（事实型信息，不与功能卡重复） ================= -->
+  <section class="strip" aria-label="技术规格">
+    <div class="strip-inner">
+      <div class="strip-item reveal">
+        <span class="strip-k">通信端口</span>
+        <span class="strip-v">UDP 45455 · TCP 45402</span>
+        <span class="strip-d">收发合一 socket + 控制/数据通道分离</span>
+      </div>
+      <div class="strip-item reveal">
+        <span class="strip-k">运行时</span>
+        <span class="strip-v">.NET 8 + WPF</span>
+        <span class="strip-d">自包含发布，无需预装运行时</span>
+      </div>
+      <div class="strip-item reveal">
+        <span class="strip-k">单元测试</span>
+        <span class="strip-v">172 个用例</span>
+        <span class="strip-d">通信协议、存储、诊断链路全覆盖</span>
+      </div>
+      <div class="strip-item reveal">
+        <span class="strip-k">开源协议</span>
+        <span class="strip-v">MIT</span>
+        <span class="strip-d">可自由使用、修改与商用</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 核心功能 ================= -->
+  <section class="section" id="features">
+    <div class="section-head reveal">
+      <span class="eyebrow">核心功能</span>
+      <h2>聊天与共享，一套应用全包了</h2>
+      <p class="section-sub">把「发消息」和「传文件」揉进同一个窗口，再顺手把共享文件夹也搬进来——局域网协作不必再来回切换工具。</p>
+    </div>
+
+    <div class="tabs reveal" role="tablist" aria-label="功能分类">
+      <button class="tab is-on" role="tab" aria-selected="true" data-tab="chat" type="button">
+        <svg class="ico sm" aria-hidden="true"><use href="#i-chat"/></svg>局域网聊天
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="share" type="button">
+        <svg class="ico sm" aria-hidden="true"><use href="#i-folder"/></svg>文件与共享
+      </button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="exp" type="button">
+        <svg class="ico sm" aria-hidden="true"><use href="#i-shield"/></svg>传输与体验
+      </button>
+    </div>
+
+    <div class="cards" id="cards">
+
+      <!-- ---- 聊天 ---- -->
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-radar"/></svg></span>
+        <h3>自动发现同网段设备</h3>
+        <p>UDP 广播心跳 + 定向单播兜底（穿透防火墙对入站的拦截），叠加 ARP 缓存 / ICMP Ping / TCP 端口三路并发探测，覆盖主机位全段。打开就在线，不用填 IP。</p>
+      </article>
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-emoji"/></svg></span>
+        <h3>消息类型齐全</h3>
+        <p>文字、Twemoji 彩色表情（200+，消息内彩色渲染）、气泡内图片直显、文件卡片，一应俱全。截图或文件复制后直接粘贴进输入框即可发送。</p>
+      </article>
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-clock"/></svg></span>
+        <h3>离线补发</h3>
+        <p>对方不在线也能先发出去：消息进入本地队列等待重投，设备重新上线后自动补发，不需要你重发一遍。</p>
+      </article>
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-check"/></svg></span>
+        <h3>送达与已读回执</h3>
+        <p>投递状态实时流转，谁收到了、谁还没看一目了然。消息状态按会话隔离，不跨会话串扰。</p>
+      </article>
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-user"/></svg></span>
+        <h3>昵称三层优先级</h3>
+        <p>显示名按「好友备注 &gt; 对方自报昵称 &gt; 主机名」取值；在设置里改一次「我的昵称」，数秒内同步到所有对端。</p>
+      </article>
+      <article class="card reveal" data-group="chat">
+        <span class="card-ico"><svg class="ico"><use href="#i-bell"/></svg></span>
+        <h3>未读角标与提示音</h3>
+        <p>未读红点叠在设备头像右上角，新消息同时触发提示音与右下角横幅，不占用系统通知气泡。</p>
+      </article>
+
+      <!-- ---- 共享 ---- -->
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-search"/></svg></span>
+        <h3>设备 + 共享三合一扫描</h3>
+        <p>ARP 缓存、ICMP Ping、TCP 端口三路并发探测定位主机，再叠加 NetShareEnum 结构化枚举，一次把共享列表列全，并自动过滤电视家电等无共享设备。</p>
+      </article>
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-wrench"/></svg></span>
+        <h3>SMB 智能诊断</h3>
+        <p>连接失败不再只有一句「无法访问」。通过 IPC$ 探测获取 Win32 真实错误码，区分来宾访问被策略阻止、凭据冲突、端口未开、仅支持 SMB1 等情形。</p>
+      </article>
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-shield"/></svg></span>
+        <h3>一键提权修复</h3>
+        <p>本机可修的问题一键修复并自动复检；需要账号的设备直接在应用内输入凭据连接，密码仅内存传递、不落盘。目标侧问题给出分步中文指引。</p>
+      </article>
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-folder"/></svg></span>
+        <h3>共享文件夹内置浏览</h3>
+        <p>列表 / 图标双视图，列头为名称、大小、修改时间。右键菜单与 Ctrl+C / X / V、F2、Delete 快捷键齐备，像操作本机一样翻对方的共享盘。</p>
+      </article>
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-grid"/></svg></span>
+        <h3>拖放上传下载</h3>
+        <p>直接把文件拖进窗口即上传，下载到本地一步到位，按类型显示系统文件图标，粘贴冲突时会询问覆盖 / 跳过 / 取消。</p>
+      </article>
+      <article class="card reveal" data-group="share">
+        <span class="card-ico"><svg class="ico"><use href="#i-files"/></svg></span>
+        <h3>大文件流式传输</h3>
+        <p>控制与数据通道分离：聊天帧只带文件提议，接收方确认后回拨同端口建立数据连接，走原始二进制流——无 base64 膨胀、无分块、无大小上限。</p>
+      </article>
+
+      <!-- ---- 传输与体验 ---- -->
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-shield"/></svg></span>
+        <h3>接收方确认制</h3>
+        <p>对方确认接收后才建立数据连接，配合磁盘空间预检，防止他人向你的机器传输轰炸、占满硬盘。</p>
+      </article>
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-check"/></svg></span>
+        <h3>传输状态全程可见</h3>
+        <p>收发双向进度条 + 内联取消按钮。等待对方接收 / 传输中 / 已送达 / 对方拒绝接收 / 已拒绝接收 / 已取消传送 / 对方已取消传送 / 超过 5 分钟未接收，状态语义逐阶段分离。</p>
+      </article>
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-bell"/></svg></span>
+        <h3>通知横幅</h3>
+        <p>微信式右下角横幅，带发送者与消息预览，点击直达对应会话；新消息同时触发提示音，不打断手上的工作。</p>
+      </article>
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-moon"/></svg></span>
+        <h3>黑金主题 · 明暗双态</h3>
+        <p>取色自应用图标的黑金体系（品牌金 <code>#C8912A</code> + 暖黑 <code>#1C1913</code>），标题栏一键切换明暗，偏好自动持久化。</p>
+      </article>
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-power"/></svg></span>
+        <h3>网络唤醒（WoL）</h3>
+        <p>对离线且有 MAC 的设备直接发送 Wake-on-LAN 魔术包把它叫醒，远程开机后再接着传文件。</p>
+      </article>
+      <article class="card reveal" data-group="exp">
+        <span class="card-ico"><svg class="ico"><use href="#i-layers"/></svg></span>
+        <h3>多网卡智能识别</h3>
+        <p>以「已启用网卡 + IPv4 网关」定位本机子网，排除虚拟网卡与多网卡环境的干扰，扫描范围不再跑偏。</p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ================= 工作原理 ================= -->
+  <section class="section section-alt" id="how">
+    <div class="section-head reveal">
+      <span class="eyebrow">工作原理</span>
+      <h2>没有服务器，只有两台电脑在说话</h2>
+      <p class="section-sub">用 UDP 广播互相「打招呼」，用 TCP 建立可靠连接，文件走独立数据通道。所有数据点对点流动，中间没有任何中转节点。</p>
+    </div>
+
+    <div class="how-wrap">
+      <div class="how-diagram reveal">
+        <div class="how-node">
+          <span class="how-ico"><svg class="ico"><use href="#i-monitor"/></svg></span>
+          <b>你的电脑</b>
+          <small>UDP 45455 · TCP 45402</small>
+        </div>
+        <div class="how-wire">
+          <span class="how-wire-label">局域网 · 点对点直连</span>
+          <span class="how-packet p1">广播心跳</span>
+          <span class="how-packet p2">聊天帧 / 文件提议</span>
+          <span class="how-packet p3">数据流 · 二进制</span>
+        </div>
+        <div class="how-node">
+          <span class="how-ico"><svg class="ico"><use href="#i-server"/></svg></span>
+          <b>对端设备</b>
+          <small>NAS / 笔记本 / 台式机</small>
+        </div>
+      </div>
+
+      <ol class="how-steps">
+        <li class="reveal">
+          <span class="how-step-num">1</span>
+          <div><b>广播发现</b><p>UDP 45455 收发合一 socket 发出广播心跳，源端口固定使双方端点对称，出站会话的回包必然命中；对已知对端再用定向单播兜底，穿透防火墙对入站的拦截。</p></div>
+        </li>
+        <li class="reveal">
+          <span class="how-step-num">2</span>
+          <div><b>建立会话</b><p>握手成功后建立 TCP 45402 控制通道，首帧声明本次连接用途（Hello 或 FileData 分派），控制与数据各走各的通道。</p></div>
+        </li>
+        <li class="reveal">
+          <span class="how-step-num">3</span>
+          <div><b>传输数据</b><p>聊天帧只携带文件提议；接收方确认并完成磁盘空间预检后，回拨同端口建立数据连接，文件以原始二进制流传输。</p></div>
+        </li>
+        <li class="reveal">
+          <span class="how-step-num">4</span>
+          <div><b>离线兜底</b><p>对端不在线时消息进入本地队列，设备重新上线后自动补发，并同步送达与已读状态。</p></div>
+        </li>
+      </ol>
+    </div>
+
+    <div class="privacy reveal">
+      <span class="privacy-ico"><svg class="ico"><use href="#i-lock"/></svg></span>
+      <div>
+        <b>数据不出内网</b>
+        <p>不依赖任何云端服务，不上传设备信息与文件内容。设备身份（NodeId）与昵称仅保存在本机 <code>%LocalAppData%\YiziShare</code>，并在 Roaming 目录留有备份用于重装后恢复身份。凭据仅在内存中传递，不落盘。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 使用指南 ================= -->
+  <section class="section" id="guide">
+    <div class="section-head reveal">
+      <span class="eyebrow">使用指南</span>
+      <h2>三步开始，比装个输入法还快</h2>
+      <p class="section-sub">绿色便携版解压即用，不需要安装、不需要注册账号，两台在同一网段的电脑就能立刻聊起来。</p>
+    </div>
+
+    <div class="guide-grid">
+      <article class="guide-card reveal">
+        <span class="guide-step">STEP 1</span>
+        <h3>下载并解压</h3>
+        <p>从 Releases 下载 <code>YiziShare-v0.9.36-x64.zip</code>，解压到任意目录，双击 <code>YiziShare.App.exe</code> 即可运行。自包含发布，无需预装 .NET 运行时。</p>
+      </article>
+      <article class="guide-card reveal">
+        <span class="guide-step">STEP 2</span>
+        <h3>扫描同网段设备</h3>
+        <p>点标题栏的重新扫描，应用会自动列出同网段设备与它们开放的共享文件夹。连接失败时，设备详情里的诊断卡会说明原因并给出修复入口。</p>
+      </article>
+      <article class="guide-card reveal">
+        <span class="guide-step">STEP 3</span>
+        <h3>在聊天与共享之间切换</h3>
+        <p>选中设备即可开始聊天；点右侧的「共享」标签查看对方共享，点「打开」进入内置浏览。把文件拖进窗口就是传输，三种需求一个窗口搞定。</p>
+      </article>
+    </div>
+
+    <div class="guide-note reveal">
+      <b>开发者：</b>项目基于 .NET 8 + WPF，克隆仓库后执行 <code>dotnet build YiziShare.sln</code> 编译；<code>dotnet test</code> 可运行全量 172 个单元测试。
+    </div>
+  </section>
+
+  <!-- ================= 更新日志 ================= -->
+  <section class="section section-alt" id="changelog">
+    <div class="section-head reveal">
+      <span class="eyebrow">更新日志</span>
+      <h2>持续迭代，越用越顺手</h2>
+      <p class="section-sub">从设备扫描小工具，到如今的局域网聊天与共享中心。下面是几个关键节点，完整记录见仓库的 CHANGELOG 与 VERSION_LOG。</p>
+    </div>
+
+    <div class="log reveal">
+      <div class="log-tabs" role="tablist" aria-label="版本切换">
+        <button class="log-tab is-on" role="tab" aria-selected="true" data-log="v0936" type="button">v0.9.36</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v0935" type="button">v0.9.35</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v0934" type="button">v0.9.34</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v0920" type="button">v0.9.20</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v050" type="button">v0.5.0</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v040" type="button">v0.4.0</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v030" type="button">v0.3.0</button>
+        <button class="log-tab" role="tab" aria-selected="false" data-log="v010" type="button">v0.1.0</button>
+      </div>
+
+      <div class="log-panels">
+        <div class="log-panel is-on" data-panel="v0936">
+          <div class="log-head"><b>v0.9.36</b><span>2026-10-10</span><i class="log-tag">当前版本</i></div>
+          <p class="log-lead">大文件流式传输（无大小上限）+ 接收确认制 + 传输全链路状态语义。</p>
+          <ul>
+            <li><em>传输架构</em> 控制 / 数据通道分离：聊天帧只带文件提议，接收方确认后回拨同端口建立数据连接，首帧声明用途（Hello / FileData 分派），原始二进制流传输——无 base64 膨胀、无分块、无大小上限</li>
+            <li><em>安全</em> 接收方确认制（防传输轰炸占满对方硬盘）+ 磁盘空间预检</li>
+            <li><em>取消</em> 活动登记表（CTS + TcpClient）+ FileAbort 信令，收发双向可达</li>
+            <li><em>交互</em> 收发双向进度条 + 内联取消按钮；等待期 / 传输中 / 终态文案分离</li>
+            <li><em>状态语义</em> 等待对方接收 / 传输中 / 已送达 / 对方拒绝接收 / 已拒绝接收 / 已取消传送 / 对方已取消传送 / 超过 5 分钟未接收，已取消传送</li>
+            <li><em>细节</em> 文件卡片右键菜单按阶段完整化、状态变化自动下滚、自定义文件接收目录、拖放直发、卡片双击打开 / 另存 / 打开所在文件夹</li>
+            <li><em>修复</em> 跨窗口 StaticResource 引用导致的 XamlParseException 风暴；接收起始回调被误当完成处理（进度条与取消按钮永不出现）</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v0935">
+          <div class="log-head"><b>v0.9.35</b><span>2026-10-10</span></div>
+          <p class="log-lead">修复 UDP 单播兜底失效，让「后启动的设备」也能被发现。</p>
+          <ul>
+            <li><em>修复</em> 向已知对端发定向单播心跳时，发送走独立随机端口 socket，导致对端防火墙记录的会话端点不匹配、入站仍被拦截（表现为单播兜底时灵时不灵）</li>
+            <li><em>修复</em> 改为 UDP 收发合一 socket（绑定 45455，广播与单播同源），源端口固定后双方端点对称，出站会话的回包必然命中——这是 P2P 打洞的标准前提</li>
+            <li><em>修复</em> 应用内版本号随构建更新，解决连续测试构建无法区分新旧包的问题</li>
+            <li><em>测试</em> 全量 172 个用例通过</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v0934">
+          <div class="log-head"><b>v0.9.34</b><span>2026-10-10</span></div>
+          <p class="log-lead">局域网聊天全功能落地，共享浏览内嵌，界面体系化。</p>
+          <ul>
+            <li><em>新增</em> 聊天图片与文件传输：图片直显、文件卡片、右键复制 / 另存、粘贴直发、离线补发</li>
+            <li><em>新增</em> Twemoji 彩色表情面板（200+），消息内彩色渲染（CC-BY 4.0）</li>
+            <li><em>新增</em> 昵称体系：好友备注 &gt; 自报昵称 &gt; 主机名；设置中可配置「我的昵称」并广播</li>
+            <li><em>新增</em> 设置窗口改版：无边框金壳 + 常规 / 关于双标签，关于页含版本与 GitHub 链接</li>
+            <li><em>变更</em> 全应用图标统一为 Segoe MDL2 Assets 矢量体系；输入框改微信式布局</li>
+            <li><em>修复</em> 接收端空气泡、对端改名不同步、传输窗完成后不自动关闭、拖放上传静默覆盖</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v0920">
+          <div class="log-head"><b>v0.9.20</b><span>2026-10-10</span></div>
+          <p class="log-lead">共享文件夹内置浏览上线，通知与身份体系补齐。</p>
+          <ul>
+            <li><em>新增</em> 共享文件夹内置浏览：列表 / 图标双视图、右键菜单与快捷键、拖放上传下载、粘贴冲突询问、按类型显示系统文件图标</li>
+            <li><em>新增</em> 设备卡未读角标与消息提示音（音频为程序合成）</li>
+            <li><em>新增</em> 微信式右下角通知横幅，带头像 / 预览 / 点击直达会话</li>
+            <li><em>新增</em> NodeId 双写备份（Local + Roaming），卸载清 Local 后仍可恢复设备身份</li>
+            <li><em>修复</em> 收到消息窗口不显示、离线发送消息长时间不上屏、离线补发的已读回执永不生效、双向静默崩溃</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v050">
+          <div class="log-head"><b>v0.5.0</b><span>2024-08-27</span></div>
+          <p class="log-lead">架构重构与工程化。</p>
+          <ul>
+            <li><em>新增</em> MVVM 架构重构，引入 ViewModel 层与数据绑定</li>
+            <li><em>新增</em> 设置窗口：开机自启 / 自动刷新 / 网卡选择 / 记住凭据</li>
+            <li><em>新增</em> 文件浏览器：目录浏览 / 上传 / 下载</li>
+            <li><em>新增</em> 历史记录、日志系统、高 DPI 适配与 CI/CD</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v040">
+          <div class="log-head"><b>v0.4.0</b><span>2024-08-24</span></div>
+          <p class="log-lead">一键诊断修复链路 + 黑金主题。</p>
+          <ul>
+            <li><em>新增</em> 一键诊断修复链路：本机可修一键提权修复、需登录设备应用内凭据直连、目标侧问题分步中文指引</li>
+            <li><em>新增</em> Win32 级诊断引擎，通过 IPC$ 探测获取真实错误码，新增 1326 / 86 / 1244 / 58 等映射</li>
+            <li><em>新增</em> NetShareEnum 结构化共享枚举，修正编码与空格解析问题</li>
+            <li><em>新增</em> 黑金主题与明暗主题切换，偏好持久化</li>
+            <li><em>新增</em> 单元测试 5 个测试类 38 个用例</li>
+            <li><em>变更</em> 扫描覆盖主机位全段 .1~.254 并加并发限流；本机子网识别改用「已启用网卡 + IPv4 网关」</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v030">
+          <div class="log-head"><b>v0.3.0</b><span>2024-08-20</span></div>
+          <p class="log-lead">智能诊断引擎与界面成型。</p>
+          <ul>
+            <li><em>新增</em> 智能 SMB 诊断引擎：识别 9 种连接问题并给出中文修复方案</li>
+            <li><em>新增</em> 仿 QQ 风格可折叠面板，点击设备展开右侧详情</li>
+            <li><em>新增</em> 设备昵称持久化、系统托盘、无边框窗口、液态玻璃 UI</li>
+            <li><em>新增</em> 搜索过滤：设备名称 / IP / 主机名 / 昵称实时过滤</li>
+            <li><em>新增</em> 绿色便携版单文件发布</li>
+          </ul>
+        </div>
+        <div class="log-panel" data-panel="v010">
+          <div class="log-head"><b>v0.1.0</b><span>2024-08-17</span></div>
+          <p class="log-lead">初始版本：局域网设备扫描。</p>
+          <ul>
+            <li><em>新增</em> 局域网设备扫描（ARP 缓存 / ICMP Ping / TCP 端口扫描）</li>
+            <li><em>新增</em> 共享文件夹发现（net view 命令 + WMI 备用方案）</li>
+            <li><em>新增</em> 基础 WPF 界面与设备图标识别（按 MAC 厂商）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 常见问题 ================= -->
+  <section class="section" id="faq">
+    <div class="section-head reveal">
+      <span class="eyebrow">常见问题</span>
+      <h2>你可能想知道</h2>
+    </div>
+    <div class="faq">
+      <details class="reveal" open>
+        <summary>需要安装服务器或者联网吗？</summary>
+        <p>都不需要。YiziShare 是纯客户端应用，所有发现、聊天与传输都发生在局域网内，不依赖公网、不依赖任何云端账号体系。</p>
+      </details>
+      <details class="reveal">
+        <summary>传文件有大小上限吗？</summary>
+        <p>没有。v0.9.36 起采用控制与数据通道分离的流式传输：聊天帧只携带文件提议，接收方确认后回拨同端口建立数据连接，文件以原始二进制流传输，不做 base64 编码、不做分块、不设大小上限。传输前还会做磁盘空间预检。</p>
+      </details>
+      <details class="reveal">
+        <summary>能跨网段 / 跨路由使用吗？</summary>
+        <p>默认面向同一网段。UDP 广播不会跨越路由器，但应用同时提供定向单播兜底与 ARP / Ping / 端口扫描，在路由允许的前提下可覆盖部分跨网段场景；完整跨网段组网建议配合静态路由或 VPN。</p>
+      </details>
+      <details class="reveal">
+        <summary>提示「无法访问共享文件夹」怎么办？</summary>
+        <p>点开设备详情会看到诊断卡：本机可修的问题（来宾访问被策略阻止、凭据冲突、网络发现关闭等）可以直接一键提权修复并自动复检；需要账号的设备会弹出凭据对话框，密码仅内存传递、不落盘。</p>
+      </details>
+      <details class="reveal">
+        <summary>支持 macOS / Linux 吗？</summary>
+        <p>目前基于 WPF 构建，仅支持 Windows 10 / 11（自包含发布，无需预装 .NET 运行时）。核心通信逻辑集中在 YiziShare.Core 中与界面解耦，便于后续移植。</p>
+      </details>
+      <details class="reveal">
+        <summary>可以商用吗？</summary>
+        <p>可以。项目以 MIT 协议开源，可自由使用、修改与分发，保留版权声明即可。</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section class="cta">
+    <div class="cta-inner reveal">
+      <img src="assets/icon.png" alt="YiziShare" width="64" height="64" class="cta-logo">
+      <h2>让你的局域网「活」起来</h2>
+      <p>下载即用，三分钟让同网段的电脑互相聊上天、传上文件。</p>
+      <div class="cta-actions">
+        <a class="btn btn-primary btn-lg" href="https://github.com/laoduu/yizishare/releases" target="_blank" rel="noopener">
+          <svg class="ico" aria-hidden="true"><use href="#i-download"/></svg>下载 YiziShare v0.9.36
+        </a>
+        <a class="btn btn-outline btn-lg" href="https://github.com/laoduu/yizishare" target="_blank" rel="noopener">
+          <svg class="ico solid" aria-hidden="true"><use href="#i-github"/></svg>查看源码
+        </a>
+      </div>
+      <small>Windows 10 / 11 · x64 · 绿色便携版 · MIT License</small>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= 页脚 ================= -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <img src="assets/icon.png" alt="" width="28" height="28">
+      <span><b>Yizi<span class="brand-share">Share</span></b> · 局域网聊天与文件共享</span>
+    </div>
+    <nav class="footer-links" aria-label="页脚导航">
+      <a href="#features">核心功能</a>
+      <a href="#how">工作原理</a>
+      <a href="#guide">使用指南</a>
+      <a href="#changelog">更新日志</a>
+      <a href="#faq">常见问题</a>
+      <a href="https://github.com/laoduu/yizishare" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <p class="footer-copy">© 2026 YiziShare · 基于 .NET 8 + WPF 构建 · MIT License</p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>
